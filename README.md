@@ -122,6 +122,14 @@ They run with a timeout of 10 minutes per command, stop at the first failure, an
 
 A reviewer on `claude-sonnet-5-5` with effort `low` reviewed the next feature in 2 turns for $0.032.
 
+### Tests that hang
+
+Agents run the project's tests themselves, so a test command that never exits stalls the whole run. Watch mode, open handles and watchman's macOS file-access prompt are the usual causes. Several things guard against this:
+
+- **Prompt rules:** agents are told to use the project's validation commands, never start watch mode or dev servers, pass `--watchAll=false --watchman=false --forceExit --maxWorkers=2` to Jest, and cap each command at 5 minutes. A command that hangs gets reported instead of retried with a longer timeout.
+- **Watchdog:** if an agent produces no output for 5 minutes (`ORCH_STALL_WARNING_MS`), its run gets a warning and you get a notification, so you can cancel it.
+- **Monorepos:** only the repository root is auto-detected. If the app lives in a subfolder, set the validation commands yourself (Project settings → Pipeline), for example `cd mobile && npx jest --watchAll=false --watchman=false --forceExit --maxWorkers=2`. Agents are then told to use the same commands.
+
 ### Approval checkpoints and clarification questions
 
 When the pipeline pauses, the card shows a highlighted chip and the sidebar shows "*n* waiting":

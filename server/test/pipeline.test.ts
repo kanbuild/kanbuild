@@ -11,6 +11,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-pipe-'));
 process.env.ORCH_DATA_DIR = path.join(tmp, 'data');
 process.env.ORCH_CLAUDE_BIN = path.join(here, 'fixtures/fake-claude.mjs');
 process.env.FAKE_CLAUDE_DELAY_MS = '60';
+process.env.ORCH_STALL_WARNING_MS = '1500';
 const argsDir = path.join(tmp, 'args');
 process.env.FAKE_CLAUDE_ARGS_DIR = argsDir;
 
@@ -290,6 +291,19 @@ describe('agent pipeline', () => {
     expect(feature(f.id).gate.type).toBe('plan_approval');
     await m.orch.orchestrator.cancel(f.id);
   }, 30000);
+
+  it('warns when an agent goes quiet and notes when it resumes', async () => {
+    const project = m.projects.listProjects()[0];
+    await m.projects.updateProject(project.id, { pipeline: { plan: false, validate: false, tester: false, reviewer: false, finalApproval: false } });
+    process.env.FAKE_CLAUDE_DELAY_MS = '2600';
+    const f = m.features.createFeature(project.id, { title: 'Slow tests' });
+    m.orch.orchestrator.startFeature(f.id);
+    const done = await waitFor(() => feature(f.id).status === 'done' && feature(f.id), 40000);
+    process.env.FAKE_CLAUDE_DELAY_MS = '60';
+    const events = m.runs.listEvents(done.currentRunId);
+    expect(events.some((e: any) => e.kind === 'warning' && /No output from the agent/.test(e.summary))).toBe(true);
+    expect(events.some((e: any) => e.summary === 'Agent output resumed')).toBe(true);
+  }, 60000);
 
   it('keeps open checkpoints across a backend restart', async () => {
     const project = m.projects.listProjects()[0];

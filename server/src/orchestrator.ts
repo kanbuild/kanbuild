@@ -41,7 +41,14 @@ interface ActiveRun {
   killTimer: NodeJS.Timeout | null;
   lastFlush: number;
   flushTimer: NodeJS.Timeout | null;
+  /** Last time the agent produced output (stream events). */
+  lastOutputAt: number;
+  stallWarned: boolean;
+  stallTimer: NodeJS.Timeout | null;
 }
+
+/** Warn when an agent has produced no output for this long (usually a hung test command). */
+export const STALL_WARNING_MS = Number(process.env.ORCH_STALL_WARNING_MS || 5 * 60 * 1000);
 
 /** Roles whose Claude Code session is "the feature's session" (followed up, resumed, opened in a terminal). */
 const sessionOwner = (role: string) => role === 'planner' || role === 'developer';
@@ -468,9 +475,21 @@ export class Orchestrator {
       killTimer: null,
       lastFlush: 0,
       flushTimer: null,
+      lastOutputAt: Date.now(),
+      stallWarned: false,
+      stallTimer: null,
     };
+    state.stallTimer = setInterval(() => this.checkStall(state), Math.min(30000, Math.max(1000, STALL_WARNING_MS / 4)));
+    state.stallTimer.unref?.();
     const tail = new LogTail(run.logDir, run.pid, {
       onEvents: (events, offset) => {
+        if (events.length) {
+          state.lastOutputAt = Date.now();
+          if (state.stallWarned) {
+            state.stallWarned = false;
+            addEvent(run.id, 'lifecycle', 'Agent output resumed');
+          }
+        }
         for (const e of events) addEvent(run.id, e.kind, e.summary, e.detail ?? null);
         this.scheduleFlush(state, offset, run.role);
       },
@@ -484,6 +503,23 @@ export class Orchestrator {
     state.tail = tail;
     this.active.set(run.id, state);
     tail.start(resumeOffset);
+  }
+
+  /** Flag runs that have been silent for a long time (typically a test command that never exits). */
+  private checkStall(state: ActiveRun) {
+    if (state.stallWarned || state.cancelRequested || Date.now() - state.lastOutputAt < STALL_WARNING_MS) return;
+    state.stallWarned = true;
+    const run = getRun(state.runId);
+    if (!run || run.status !== 'running') return;
+    const minutes = Math.round((Date.now() - state.lastOutputAt) / 60000);
+    const doing = run.currentActivity ? `: ${run.currentActivity}` : '';
+    addEvent(
+      run.id,
+      'warning',
+      `No output from the agent for ${minutes} min${doing}. A test or build command may be hanging (watch mode, open handles, watchman). Cancel the run if it doesn't recover.`,
+    );
+    const f = getFeatureSafe(state.featureId);
+    if (f) notify({ title: 'Agent seems stuck', body: `${f.title}${doing}`, level: 'attention', featureId: f.id, projectId: f.projectId });
   }
 
   /** Persist parser state at most ~once per second. */
@@ -517,6 +553,7 @@ export class Orchestrator {
   private async finalize(state: ActiveRun, exitCode: number | null) {
     if (state.flushTimer) clearTimeout(state.flushTimer);
     if (state.killTimer) clearTimeout(state.killTimer);
+    if (state.stallTimer) clearInterval(state.stallTimer);
     this.active.delete(state.runId);
     const run = getRun(state.runId);
     if (!run) return;
@@ -760,6 +797,7 @@ export class Orchestrator {
       a.tail?.stop();
       if (a.flushTimer) clearTimeout(a.flushTimer);
       if (a.killTimer) clearTimeout(a.killTimer);
+      if (a.stallTimer) clearInterval(a.stallTimer);
     }
     this.active.clear();
     for (const v of this.validations.values()) v.cancel();

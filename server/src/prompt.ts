@@ -99,12 +99,29 @@ Use null for passed/failed counts if you could not determine them. Be honest: re
 `;
 }
 
+/** Max time an agent should let a single test/build command run (Bash tool timeout, ms). */
+export const TEST_COMMAND_TIMEOUT_MS = 300000;
+
+/**
+ * Rules that keep test runs from hanging the agent (watch mode, open handles, watchman) or the laptop
+ * (one worker per CPU core, per agent).
+ */
+function testingRules(project: Project): string {
+  const cmds = project.pipeline?.validationCommands ?? [];
+  return `Running tests and builds:
+   - ${cmds.length ? `Use the project's own commands: ${cmds.map((c) => `\`${c}\``).join(', ')} (narrow them to the relevant test files first where the runner allows it).` : 'Use the scripts in package.json (or the equivalent) rather than invoking runners by hand.'}
+   - Never start watch mode, dev servers or anything interactive. For Jest add \`--watchAll=false --watchman=false --forceExit --maxWorkers=2\`; for Vitest use \`vitest run\`.
+   - Give each test or build command a Bash timeout of at most ${TEST_COMMAND_TIMEOUT_MS / 1000} seconds (${TEST_COMMAND_TIMEOUT_MS} ms). If a command hangs or times out, do not retry it with a longer timeout and do not work around it (for example by calling the runner through \`node -e\`): stop, and describe the hang in outstanding_issues.
+   - Keep command output short (pipe through \`tail -n 60\`).`;
+}
+
 function devRules(project: Project, cfg: LaunchConfig | undefined): string {
   return `# How to work
 1. Work only inside the current working directory (this worktree). Do not modify other checkouts, switch branches, merge, rebase or push.
 2. Implement the feature completely, following existing patterns. Add or update tests where the project has a test setup.
 3. Create or update documentation as CLAUDE.md requires, and commit it together with the code.
-4. Run the most relevant tests first, then the full test suite and build/type-check once at the end. Keep command output short (e.g. pipe through \`tail -n 60\`).
+4. Run the most relevant tests first, then the full test suite and build/type-check once at the end.
+   ${testingRules(project)}
 5. Commit your work to the current branch with clear commit messages. Leave the worktree clean.
 6. ${CLARIFY_RULE}
 7. ${permissionsLine(cfg, project.allowedTools)}
@@ -210,7 +227,8 @@ ${CONTEXT_SECTION}
 # Your task
 1. Check the tests for this feature against its requirements, acceptance criteria and edge cases. Add or extend tests where coverage is missing, following the project's existing test setup and conventions.
 2. Do not change production code, unless a test reveals a genuine bug: then make the minimal fix and describe it in the report.
-3. Run the new tests, then the full test suite. Keep command output short (pipe through \`tail -n 60\`).
+3. Run the new tests, then the full test suite.
+   ${testingRules(project)}
 4. Commit your tests to the current branch. Leave the worktree clean. Do not switch branches, merge, rebase or push.
 5. ${CLARIFY_RULE}
 6. ${permissionsLine(cfg, project.allowedTools)}

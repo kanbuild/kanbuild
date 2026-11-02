@@ -227,6 +227,13 @@ describe('roles', () => {
     expect(qa).toContain('**A1:** CSV');
     expect(qa).toContain('use your best judgement');
     expect(buildAnswerPrompt('tester', qa)).toContain('<!-- orchestrator-role: tester -->');
+    // Test-running rules: no watch mode, bounded timeouts, the project's own commands.
+    const withCmds = { ...project, pipeline: { ...project.pipeline, validationCommands: ['cd mobile && npx jest --ci'] } };
+    const dev = buildFixPrompt('user', 'x', withCmds, 'feature/x');
+    expect(dev).toContain('`cd mobile && npx jest --ci`');
+    expect(dev).toContain('--watchAll=false --watchman=false --forceExit --maxWorkers=2');
+    expect(dev).toContain('at most 300 seconds');
+    expect(dev).toContain('do not retry it with a longer timeout');
   });
 
   it('extracts plans, questions and reviews from agent reports', () => {
