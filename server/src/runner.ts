@@ -28,6 +28,19 @@ export const INHERITED_SESSION_VARS = [
   'CLAUDE_EFFORT',
 ];
 
+/**
+ * Environment for processes the orchestrator starts. If the orchestrator itself was started from inside
+ * a Claude Code session, children must not inherit that session's identity (agents would all report and
+ * resume the parent's session id). The GitHub token is never passed to agents or validation commands.
+ */
+export function childEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  for (const k of INHERITED_SESSION_VARS) delete env[k];
+  delete env.ORCH_GITHUB_TOKEN;
+  delete env.ORCH_GIT_TOKEN;
+  return env;
+}
+
 export const STDOUT_FILE = 'stdout.ndjson';
 export const STDERR_FILE = 'stderr.log';
 export const EXIT_FILE = 'exit_code';
@@ -42,10 +55,7 @@ export function launchDetached(spec: LaunchSpec): number {
   const out = fs.openSync(path.join(spec.logDir, STDOUT_FILE), 'a');
   const err = fs.openSync(path.join(spec.logDir, STDERR_FILE), 'a');
   const exitFile = path.join(spec.logDir, EXIT_FILE);
-  const env: NodeJS.ProcessEnv = { ...process.env, ORCH_EXIT_FILE: exitFile };
-  // If the orchestrator itself was started from inside a Claude Code session, don't let agents inherit
-  // that session's identity (they would all report and resume the parent's session id).
-  for (const k of INHERITED_SESSION_VARS) delete env[k];
+  const env = childEnv({ ORCH_EXIT_FILE: exitFile });
   const child = spawn(
     '/bin/sh',
     ['-c', '"$0" "$@" < /dev/null; code=$?; echo "$code" > "$ORCH_EXIT_FILE.tmp" && mv "$ORCH_EXIT_FILE.tmp" "$ORCH_EXIT_FILE"', spec.binary, ...spec.args],

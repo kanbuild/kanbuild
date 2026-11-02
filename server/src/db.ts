@@ -99,6 +99,24 @@ const MIGRATIONS: string[] = [
   ALTER TABLE runs ADD COLUMN peak_context_tokens INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE runs ADD COLUMN permission_denials INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  ALTER TABLE features ADD COLUMN gate_json TEXT;
+  ALTER TABLE features ADD COLUMN base_ref TEXT;
+  ALTER TABLE features ADD COLUMN pr_url TEXT;
+  ALTER TABLE features ADD COLUMN pr_number INTEGER;
+  ALTER TABLE runs ADD COLUMN role TEXT NOT NULL DEFAULT 'developer';
+  ALTER TABLE runs ADD COLUMN fix_reason TEXT;
+  ALTER TABLE runs ADD COLUMN cycle INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE runs ADD COLUMN validation_json TEXT;
+  ALTER TABLE projects ADD COLUMN pipeline_json TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE projects ADD COLUMN roles_json TEXT NOT NULL DEFAULT '{}';
+  CREATE TABLE feature_dependencies (
+    feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+    depends_on_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+    PRIMARY KEY (feature_id, depends_on_id)
+  );
+  CREATE INDEX feature_dependencies_dep ON feature_dependencies(depends_on_id);
+  `,
 ];
 
 export function getDb(): DatabaseSync {

@@ -88,13 +88,22 @@ describe('slugify', () => {
 import { LEAN_TOOLS, buildClaudeArgs, previewCommand, resolveLaunchConfig, resumeCommand } from '../src/launch.ts';
 import { allowedBashCommands, buildFollowupPrompt, buildPrompt } from '../src/prompt.ts';
 import { EditorError, findExecutable, openTerminalCommand, resolveEditorCommand } from '../src/editor.ts';
-import type { Project, Settings } from '../../shared/types.ts';
+import { DEFAULT_PIPELINE } from '../src/projects.ts';
+import type { Feature, Project, Settings } from '../../shared/types.ts';
 
 const project: Project = {
   id: 'prj_1', name: 'Tiles', description: '', path: '/r', baseBranch: 'main', worktreeRoot: '/r-wt',
-  allowedTools: ['Read', 'Bash(npm:*)', 'Bash(git commit:*)'], model: '', agentProfile: '', effort: '', mcpConfig: '', createdAt: '',
+  allowedTools: ['Read', 'Bash(npm:*)', 'Bash(git commit:*)'], model: '', agentProfile: '', effort: '', mcpConfig: '',
+  pipeline: DEFAULT_PIPELINE, roles: {}, createdAt: '',
 };
-const settings: Settings = { concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude' };
+const settings: Settings = {
+  concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude',
+  notifications: 'all', systemNotifications: false,
+};
+const sampleFeature: Feature = {
+  id: 'f', projectId: 'p', title: 'T', description: 'D', priority: 'low', status: 'build', position: 0, branch: null, worktreePath: null, sessionId: null,
+  agentStatus: null, currentRunId: null, dependsOn: [], blockedBy: [], gate: null, baseRef: null, prUrl: null, prNumber: null, createdAt: '', updatedAt: '',
+};
 
 describe('launch args', () => {
   it('lean profile trims tools, skills, MCP and user settings', () => {
@@ -127,10 +136,7 @@ describe('launch args', () => {
 
 describe('prompt', () => {
   it('defers to CLAUDE.md docs workflow and lists allowed commands', () => {
-    const p = buildPrompt(
-      { id: 'f', projectId: 'p', title: 'T', description: 'D', priority: 'low', status: 'build', position: 0, branch: null, worktreePath: null, sessionId: null, agentStatus: null, currentRunId: null, createdAt: '', updatedAt: '' },
-      project, 'feature/t', 1,
-    );
+    const p = buildPrompt(sampleFeature, project, 'feature/t', 1);
     expect(p).toContain('Follow its instructions about which documentation to consult');
     expect(p).toContain('`npm`, `git commit`');
     expect(p).toContain('"docs_updated"');

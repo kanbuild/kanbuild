@@ -1,4 +1,19 @@
-import type { AgentSelfReport, AgentStatus, Changes, Feature, Project, Report, RunKind, RunMetrics, Usage } from '../../shared/types.ts';
+import type {
+  AgentRole,
+  AgentSelfReport,
+  AgentStatus,
+  Changes,
+  Feature,
+  FixReason,
+  Project,
+  Report,
+  ReviewFinding,
+  ReviewResult,
+  RunKind,
+  RunMetrics,
+  Usage,
+  ValidationResult,
+} from '../../shared/types.ts';
 
 function asString(v: unknown): string {
   if (typeof v === 'string') return v;
@@ -26,8 +41,37 @@ export function emptySelfReport(): AgentSelfReport {
     build: { status: 'unknown', output: '' },
     outstandingIssues: [],
     docsUpdated: [],
+    plan: '',
+    needsClarification: [],
+    review: null,
     reported: false,
   };
+}
+
+const SEVERITIES: ReviewFinding['severity'][] = ['blocker', 'major', 'minor', 'nit'];
+
+function parseReview(v: any): ReviewResult | null {
+  if (!v || typeof v !== 'object') return null;
+  const verdictRaw = String(v.verdict ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  const findings: ReviewFinding[] = (Array.isArray(v.findings) ? v.findings : []).map((f: any) => {
+    const sev = String(f?.severity ?? 'minor').toLowerCase();
+    const line = asNum(f?.line);
+    return {
+      severity: (SEVERITIES.includes(sev as any) ? sev : sev === 'critical' ? 'blocker' : 'minor') as ReviewFinding['severity'],
+      file: asString(f?.file ?? f?.path),
+      line: line !== null ? Math.floor(line) : null,
+      message: asString(f?.message ?? f?.description ?? f),
+    };
+  });
+  const verdict: ReviewResult['verdict'] =
+    verdictRaw === 'approve' || verdictRaw === 'approved' || verdictRaw === 'lgtm'
+      ? 'approve'
+      : verdictRaw.includes('change') || verdictRaw === 'reject'
+        ? 'changes_requested'
+        : findings.some((f) => f.severity === 'blocker' || f.severity === 'major')
+          ? 'changes_requested'
+          : 'approve';
+  return { verdict, summary: asString(v.summary), findings };
 }
 
 /**
@@ -48,7 +92,7 @@ export function extractSelfReport(text: string): AgentSelfReport {
   for (const c of candidates.reverse()) {
     try {
       const parsed = JSON.parse(c);
-      if (parsed && typeof parsed === 'object' && ('summary' in parsed || 'tests' in parsed)) {
+      if (parsed && typeof parsed === 'object' && ['summary', 'tests', 'plan', 'review', 'needs_clarification'].some((k) => k in parsed)) {
         obj = parsed;
         break;
       }
@@ -80,6 +124,9 @@ export function extractSelfReport(text: string): AgentSelfReport {
   };
   report.outstandingIssues = asStringArray(obj.outstanding_issues ?? obj.outstandingIssues ?? obj.issues);
   report.docsUpdated = asStringArray(obj.docs_updated ?? obj.docsUpdated);
+  report.plan = asString(obj.plan);
+  report.needsClarification = asStringArray(obj.needs_clarification ?? obj.needsClarification ?? obj.questions);
+  report.review = parseReview(obj.review);
   return report;
 }
 
@@ -109,14 +156,17 @@ export function buildReport(args: {
   error: string | null;
   metrics?: RunMetrics;
   kind?: RunKind;
+  role?: AgentRole;
+  fixReason?: FixReason | null;
   message?: string | null;
 }): Report {
   const { feature, project, self, changes, usage } = args;
   const lines: string[] = [];
-  lines.push(`# ${args.kind === 'followup' ? 'Follow-up report' : 'Implementation report'}: ${feature.title}`);
+  lines.push(`# ${reportTitle(args.kind, args.role, args.fixReason)}: ${feature.title}`);
   lines.push('');
-  if (args.kind === 'followup' && args.message) {
-    lines.push(`> **Follow-up request:** ${args.message.replace(/\n/g, ' ')}`);
+  if ((args.kind === 'followup' || args.kind === 'fix' || args.kind === 'answer') && args.message) {
+    const label = args.kind === 'followup' ? 'Follow-up request' : args.kind === 'answer' ? 'User answers' : 'Fix request';
+    lines.push(`> **${label}:** ${args.message.replace(/\n+/g, ' ').slice(0, 1500)}`);
     lines.push('');
   }
   lines.push(`- **Project:** ${project.name}`);
@@ -128,6 +178,32 @@ export function buildReport(args: {
   lines.push('## 1. Summary');
   lines.push(self.summary || '_The agent did not provide a summary._');
   lines.push('');
+
+  if (self.needsClarification.length) {
+    lines.push('## Questions for the user');
+    self.needsClarification.forEach((q, i) => lines.push(`${i + 1}. ${q}`));
+    lines.push('');
+  }
+
+  if (self.plan) {
+    lines.push('## Implementation plan');
+    lines.push(self.plan);
+    lines.push('');
+  }
+
+  if (self.review) {
+    lines.push(`## Code review: ${self.review.verdict === 'approve' ? '✅ approved' : '❌ changes requested'}`);
+    if (self.review.summary) lines.push(self.review.summary);
+    lines.push('');
+    if (self.review.findings.length) {
+      lines.push('| Severity | Location | Finding |');
+      lines.push('|---|---|---|');
+      for (const f of self.review.findings) {
+        lines.push(`| ${f.severity} | \`${f.file}${f.line ? `:${f.line}` : ''}\` | ${f.message.replace(/\|/g, '\\|').replace(/\n/g, ' ')} |`);
+      }
+    } else lines.push('_No findings._');
+    lines.push('');
+  }
 
   lines.push('## 2. Implementation details');
   lines.push(self.implementationDetails || '_Not reported._');
@@ -236,6 +312,71 @@ export function buildReport(args: {
     model: args.model,
     metrics: args.metrics,
     kind: args.kind,
+    role: args.role,
+    markdown: lines.join('\n'),
+  };
+}
+
+export function reportTitle(kind?: RunKind, role?: AgentRole, fixReason?: FixReason | null): string {
+  if (role === 'planner') return 'Implementation plan';
+  if (role === 'reviewer') return 'Code review';
+  if (role === 'tester') return 'Test report';
+  if (role === 'validator') return 'Validation report';
+  if (kind === 'fix') return fixReason === 'validation' ? 'Fix report (validation failures)' : fixReason === 'review' ? 'Fix report (review findings)' : 'Fix report (user feedback)';
+  if (kind === 'followup') return 'Follow-up report';
+  return 'Implementation report';
+}
+
+/** Report for a validator run: the commands the orchestrator ran and their results. */
+export function buildValidationReport(args: {
+  runId: string;
+  feature: Feature;
+  project: Project;
+  status: AgentStatus;
+  results: ValidationResult[];
+  changes: Changes;
+  durationMs: number | null;
+  note?: string;
+}): Report {
+  const self = emptySelfReport();
+  const failed = args.results.filter((r) => r.exitCode !== 0 || r.timedOut);
+  self.reported = true;
+  self.summary = args.results.length
+    ? failed.length
+      ? `${failed.length} of ${args.results.length} validation command(s) failed.`
+      : `All ${args.results.length} validation command(s) passed.`
+    : args.note || 'No validation commands configured or detected.';
+  self.tests = {
+    executed: args.results.map((r) => r.command),
+    passed: args.results.length - failed.length,
+    failed: failed.length,
+    notRun: [],
+    output: failed.map((r) => `$ ${r.command}\n${r.output.split('\n').slice(-40).join('\n')}`).join('\n\n'),
+  };
+  self.build = { status: failed.length ? 'failed' : args.results.length ? 'passed' : 'not_run', output: '' };
+  const lines = [`# Validation report: ${args.feature.title}`, '', `- **Project:** ${args.project.name}`, `- **Status:** ${args.status}`, `- **Duration:** ${fmtDuration(args.durationMs)}`, ''];
+  if (args.note) lines.push(`> ${args.note}`, '');
+  lines.push('| Command | Result | Duration |', '|---|---|---|');
+  for (const r of args.results) {
+    lines.push(`| \`${r.command}\` | ${r.timedOut ? '⏱ timed out' : r.exitCode === 0 ? '✅ passed' : `❌ exit ${r.exitCode}`} | ${fmtDuration(r.durationMs)} |`);
+  }
+  for (const r of failed) {
+    lines.push('', `### \`${r.command}\``, '```text', r.output.split('\n').slice(-80).join('\n'), '```');
+  }
+  return {
+    runId: args.runId,
+    featureId: args.feature.id,
+    generatedAt: new Date().toISOString(),
+    status: args.status,
+    self,
+    changes: args.changes,
+    usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 },
+    estimatedCostUsd: 0,
+    reportedCostUsd: null,
+    durationMs: args.durationMs,
+    model: null,
+    kind: 'validate',
+    role: 'validator',
     markdown: lines.join('\n'),
   };
 }

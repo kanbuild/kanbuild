@@ -117,7 +117,7 @@ export function launch(cmd: ResolvedCommand): Promise<void> {
   });
 }
 
-function appleScriptString(s: string): string {
+export function appleScriptString(s: string): string {
   return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 

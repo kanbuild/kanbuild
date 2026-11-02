@@ -2,7 +2,54 @@ import path from 'node:path';
 import { getDb, newId, now } from './db.ts';
 import { bus } from './events.ts';
 import { expandHome, validateRepoPath } from './git.ts';
-import type { Project } from '../../shared/types.ts';
+import { CLAUDE_ROLES, type PipelineConfig, type Project, type RolesConfig } from '../../shared/types.ts';
+
+export const DEFAULT_PIPELINE: PipelineConfig = {
+  plan: true,
+  planApproval: true,
+  validate: true,
+  validationCommands: [],
+  tester: true,
+  reviewer: false,
+  finalApproval: false,
+  maxFixLoops: 2,
+  autoCreatePr: false,
+  prDraft: true,
+  remote: 'origin',
+};
+
+/** Merge a (partial, possibly untrusted) pipeline config over a base config. */
+export function cleanPipeline(input: unknown, base: PipelineConfig = DEFAULT_PIPELINE): PipelineConfig {
+  const v = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const bool = (k: keyof PipelineConfig) => (typeof v[k] === 'boolean' ? (v[k] as boolean) : (base[k] as boolean));
+  const loops = Number(v.maxFixLoops);
+  return {
+    plan: bool('plan'),
+    planApproval: bool('planApproval'),
+    validate: bool('validate'),
+    validationCommands: Array.isArray(v.validationCommands)
+      ? v.validationCommands.map((c) => String(c).trim()).filter(Boolean).slice(0, 20)
+      : base.validationCommands,
+    tester: bool('tester'),
+    reviewer: bool('reviewer'),
+    finalApproval: bool('finalApproval'),
+    maxFixLoops: Number.isFinite(loops) && v.maxFixLoops !== undefined && v.maxFixLoops !== null ? Math.max(0, Math.min(5, Math.floor(loops))) : base.maxFixLoops,
+    autoCreatePr: bool('autoCreatePr'),
+    prDraft: bool('prDraft'),
+    remote: typeof v.remote === 'string' && /^[\w.-]+$/.test(v.remote.trim()) ? v.remote.trim() : base.remote,
+  };
+}
+
+export function cleanRoles(input: unknown, base: RolesConfig = {}): RolesConfig {
+  const v = (input && typeof input === 'object' ? input : {}) as Record<string, any>;
+  const out: RolesConfig = { ...base };
+  for (const role of CLAUDE_ROLES) {
+    if (!(role in v)) continue;
+    const r = v[role] ?? {};
+    out[role] = { model: typeof r.model === 'string' ? r.model.trim() : '', effort: cleanEffort(r.effort, '') };
+  }
+  return out;
+}
 
 export const DEFAULT_ALLOWED_TOOLS = [
   'Read',
@@ -51,8 +98,18 @@ function rowToProject(r: any): Project {
     agentProfile: r.agent_profile ?? '',
     effort: r.effort ?? '',
     mcpConfig: r.mcp_config ?? '',
+    pipeline: cleanPipeline(safeJson(r.pipeline_json)),
+    roles: cleanRoles(safeJson(r.roles_json)),
     createdAt: r.created_at,
   };
+}
+
+function safeJson(s: string | null | undefined): unknown {
+  try {
+    return s ? JSON.parse(s) : {};
+  } catch {
+    return {};
+  }
 }
 
 export function listProjects(): Project[] {
@@ -76,6 +133,8 @@ export interface ProjectInput {
   agentProfile?: string;
   effort?: string;
   mcpConfig?: string;
+  pipeline?: Partial<PipelineConfig>;
+  roles?: RolesConfig;
 }
 
 function cleanProfile(v: string | undefined, fallback: Project['agentProfile']): Project['agentProfile'] {
@@ -108,12 +167,14 @@ export async function createProject(input: ProjectInput): Promise<Project> {
     agentProfile: cleanProfile(input.agentProfile, ''),
     effort: cleanEffort(input.effort, ''),
     mcpConfig: input.mcpConfig ?? '',
+    pipeline: cleanPipeline(input.pipeline),
+    roles: cleanRoles(input.roles),
     createdAt: now(),
   };
   getDb()
     .prepare(
-      `INSERT INTO projects (id, name, description, path, base_branch, worktree_root, allowed_tools, model, agent_profile, effort, mcp_config, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projects (id, name, description, path, base_branch, worktree_root, allowed_tools, model, agent_profile, effort, mcp_config, pipeline_json, roles_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       project.id,
@@ -127,6 +188,8 @@ export async function createProject(input: ProjectInput): Promise<Project> {
       project.agentProfile,
       project.effort,
       project.mcpConfig,
+      JSON.stringify(project.pipeline),
+      JSON.stringify(project.roles),
       project.createdAt,
     );
   bus.publish({ type: 'project.updated', project });
@@ -153,10 +216,12 @@ export async function updateProject(id: string, input: ProjectInput): Promise<Pr
     agentProfile: cleanProfile(input.agentProfile, p.agentProfile),
     effort: cleanEffort(input.effort, p.effort),
     mcpConfig: input.mcpConfig ?? p.mcpConfig,
+    pipeline: input.pipeline ? cleanPipeline(input.pipeline, p.pipeline) : p.pipeline,
+    roles: input.roles ? cleanRoles(input.roles, p.roles) : p.roles,
   };
   getDb()
     .prepare(
-      'UPDATE projects SET name=?, description=?, base_branch=?, worktree_root=?, allowed_tools=?, model=?, agent_profile=?, effort=?, mcp_config=? WHERE id=?',
+      'UPDATE projects SET name=?, description=?, base_branch=?, worktree_root=?, allowed_tools=?, model=?, agent_profile=?, effort=?, mcp_config=?, pipeline_json=?, roles_json=? WHERE id=?',
     )
     .run(
       next.name,
@@ -168,6 +233,8 @@ export async function updateProject(id: string, input: ProjectInput): Promise<Pr
       next.agentProfile,
       next.effort,
       next.mcpConfig,
+      JSON.stringify(next.pipeline),
+      JSON.stringify(next.roles),
       id,
     );
   bus.publish({ type: 'project.updated', project: next });

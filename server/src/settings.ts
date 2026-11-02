@@ -10,6 +10,8 @@ const DEFAULTS: Settings = {
   defaultModel: '',
   editorCommand: 'vscode',
   claudeBinary: process.env.ORCH_CLAUDE_BIN || 'claude',
+  notifications: 'all',
+  systemNotifications: process.platform === 'darwin',
 };
 
 export function getSettings(): Settings {
@@ -41,6 +43,11 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     } else if (k === 'agentProfile') {
       if (v !== 'lean' && v !== 'full') continue;
       stmt.run(k, JSON.stringify(v));
+    } else if (k === 'notifications') {
+      if (!['all', 'attention', 'off'].includes(String(v))) continue;
+      stmt.run(k, JSON.stringify(v));
+    } else if (k === 'systemNotifications') {
+      stmt.run(k, JSON.stringify(v === true || v === 'true'));
     } else if (k === 'effort') {
       if (!['', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(v))) continue;
       stmt.run(k, JSON.stringify(v));

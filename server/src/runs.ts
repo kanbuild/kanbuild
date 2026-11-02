@@ -1,6 +1,19 @@
 import { getDb, newId, now } from './db.ts';
 import { bus } from './events.ts';
-import type { AgentStatus, ProgressStage, Report, Run, RunEvent, RunEventKind, RunKind, RunMetrics, Usage } from '../../shared/types.ts';
+import type {
+  AgentRole,
+  AgentStatus,
+  FixReason,
+  ProgressStage,
+  Report,
+  Run,
+  RunEvent,
+  RunEventKind,
+  RunKind,
+  RunMetrics,
+  Usage,
+  ValidationResult,
+} from '../../shared/types.ts';
 
 export interface RunRow extends Run {
   logDir: string | null;
@@ -13,7 +26,11 @@ export function rowToRun(r: any): RunRow {
     featureId: r.feature_id,
     attempt: r.attempt,
     kind: r.kind ?? 'feature',
+    role: r.role ?? 'developer',
+    cycle: r.cycle ?? 1,
+    fixReason: r.fix_reason ?? null,
     message: r.message ?? null,
+    validation: r.validation_json ? JSON.parse(r.validation_json) : null,
     metrics: {
       turns: r.turns ?? 0,
       baselineContextTokens: r.baseline_context_tokens ?? 0,
@@ -63,19 +80,39 @@ export function listRunsForFeature(featureId: string): Run[] {
   );
 }
 
+/** Runs of one pipeline cycle, oldest first. */
+export function listCycleRuns(featureId: string, cycle: number): RunRow[] {
+  return (getDb().prepare('SELECT * FROM runs WHERE feature_id = ? AND cycle = ? ORDER BY attempt').all(featureId, cycle) as any[]).map(rowToRun);
+}
+
+export function latestCycle(featureId: string): number {
+  const r = getDb().prepare('SELECT MAX(cycle) AS c FROM runs WHERE feature_id = ?').get(featureId) as { c: number | null };
+  return r.c ?? 0;
+}
+
 export function listRunsByStatus(statuses: AgentStatus[]): RunRow[] {
   const q = `SELECT * FROM runs WHERE status IN (${statuses.map(() => '?').join(',')}) ORDER BY created_at`;
   return (getDb().prepare(q).all(...statuses) as any[]).map(rowToRun);
 }
 
-export function createRun(featureId: string, kind: RunKind = 'feature', message: string | null = null): RunRow {
+export interface NewRun {
+  kind?: RunKind;
+  role?: AgentRole;
+  message?: string | null;
+  fixReason?: FixReason | null;
+  /** Cycle to attach to; defaults to the latest cycle (or 1). */
+  cycle?: number;
+}
+
+export function createRun(featureId: string, opts: NewRun = {}): RunRow {
   const d = getDb();
   const prev = d.prepare('SELECT MAX(attempt) AS a FROM runs WHERE feature_id = ?').get(featureId) as { a: number | null };
   const id = newId('run');
+  const cycle = opts.cycle ?? Math.max(1, latestCycle(featureId));
   d.prepare(
-    `INSERT INTO runs (id, feature_id, attempt, kind, message, status, stage, current_activity, created_at)
-     VALUES (?, ?, ?, ?, ?, 'queued', 'queued', 'Waiting for an execution slot', ?)`,
-  ).run(id, featureId, (prev.a ?? 0) + 1, kind, message, now());
+    `INSERT INTO runs (id, feature_id, attempt, kind, role, cycle, fix_reason, message, status, stage, current_activity, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', 'queued', 'Waiting for an execution slot', ?)`,
+  ).run(id, featureId, (prev.a ?? 0) + 1, opts.kind ?? 'feature', opts.role ?? 'developer', cycle, opts.fixReason ?? null, opts.message ?? null, now());
   const run = getRun(id)!;
   bus.publish({ type: 'run.updated', run: publicRun(run) });
   return run;
@@ -101,6 +138,7 @@ export interface RunPatch {
   sessionId?: string | null;
   commitHash?: string | null;
   report?: Report;
+  validation?: ValidationResult[];
 }
 
 const COLS: Record<string, string> = {
@@ -137,6 +175,9 @@ export function updateRun(id: string, patch: RunPatch, opts: { silent?: boolean 
       vals.push(m.turns, m.baselineContextTokens, m.peakContextTokens, m.permissionDenials);
     } else if (k === 'report') {
       sets.push('report_json=?');
+      vals.push(JSON.stringify(v));
+    } else if (k === 'validation') {
+      sets.push('validation_json=?');
       vals.push(JSON.stringify(v));
     } else if (COLS[k]) {
       sets.push(`${COLS[k]}=?`);

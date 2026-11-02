@@ -7,6 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { DATA_DIR, getDb } from './db.ts';
 import { bus } from './events.ts';
 import { orchestrator } from './orchestrator.ts';
+import { setClientCounter } from './notify.ts';
 import { api } from './routes/api.ts';
 import type { ServerMessage } from '../../shared/types.ts';
 
@@ -62,6 +63,7 @@ server.on('upgrade', (req, socket, head) => {
   }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
+setClientCounter(() => [...wss.clients].filter((c) => c.readyState === WebSocket.OPEN).length);
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'hello' }));
 });

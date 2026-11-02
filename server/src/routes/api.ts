@@ -8,17 +8,22 @@ import {
   moveFeature,
   patchFeatureState,
   reorderFeatures,
+  setDependencies,
   updateFeatureFields,
 } from '../features.ts';
-import { collectChanges, isWorktreeDirty, removeWorktree, validateRepoPath } from '../git.ts';
+import { collectChanges, getDiff, isWorktreeDirty, removeWorktree, validateRepoPath, type DiffScope } from '../git.ts';
+import { GithubError, githubStatus, setToken, verifyToken } from '../github.ts';
+import { notify } from '../notify.ts';
+import { createPrForFeature } from '../pr.ts';
+import { detectValidationCommands } from '../validation.ts';
 import { orchestrator } from '../orchestrator.ts';
 import { DEFAULT_ALLOWED_TOOLS, HttpError, createProject, deleteProject, getProject, listProjects, updateProject } from '../projects.ts';
 import { getReport, getRun, listEvents, listRunsForFeature, publicRun } from '../runs.ts';
 import { getSettings, updateSettings } from '../settings.ts';
 import { EDITOR_PRESETS, EditorError, launch, openTerminalCommand, resolveEditorCommand, revealCommand } from '../editor.ts';
 import { buildClaudeArgs, previewCommand, resolveLaunchConfig, resumeCommand } from '../launch.ts';
-import { buildPrompt } from '../prompt.ts';
-import { ACTIVE_AGENT_STATUSES, type FeatureStatus } from '../../../shared/types.ts';
+import { buildPlanPrompt, buildPrompt, buildReviewerPrompt, buildTesterPrompt } from '../prompt.ts';
+import { ACTIVE_AGENT_STATUSES, CLAUDE_ROLES, type Feature, type FeatureStatus } from '../../../shared/types.ts';
 
 type Handler = (req: Request, res: Response) => unknown | Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -43,7 +48,29 @@ api.get('/settings', h(() => ({
   defaultAllowedTools: DEFAULT_ALLOWED_TOOLS,
   editorPresets: EDITOR_PRESETS.map((p) => ({ id: p.id, label: p.label })),
   platform: process.platform,
+  github: githubStatus(),
 })));
+/** Store (validated) or clear the GitHub token. The token itself is never returned. */
+api.put('/settings/github', h(async (req) => {
+  try {
+    return await setToken(String(req.body?.token ?? ''));
+  } catch (err) {
+    if (err instanceof GithubError) throw new HttpError(400, err.message);
+    throw err;
+  }
+}));
+api.get('/settings/github', h(async () => {
+  try {
+    return await verifyToken();
+  } catch (err) {
+    if (err instanceof GithubError) return { ...githubStatus(), error: err.message };
+    throw err;
+  }
+}));
+api.post('/notifications/test', h(() => {
+  const n = notify({ title: 'Test notification', body: 'Notifications from the orchestrator are working.', level: 'attention', featureId: null, projectId: null });
+  return { ok: true, sent: !!n };
+}));
 api.put('/settings', h((req) => {
   const s = updateSettings(req.body ?? {});
   orchestrator.tick(); // concurrency may have increased
@@ -61,16 +88,28 @@ api.patch('/projects/:id', h((req) => updateProject(req.params.id, req.body ?? {
 api.get('/projects/:id/launch-preview', h((req) => {
   const project = getProject(req.params.id);
   const settings = getSettings();
-  const cfg = resolveLaunchConfig(project, settings);
-  const sample = buildPrompt(
-    { id: 'ftr_preview', projectId: project.id, title: '<feature title>', description: '<feature description>', priority: 'medium', status: 'build', position: 0, branch: null, worktreePath: null, sessionId: null, agentStatus: null, currentRunId: null, createdAt: '', updatedAt: '' },
-    project,
-    'feature/<slug>',
-    1,
-    cfg,
+  const sampleFeature: Feature = {
+    id: 'ftr_preview', projectId: project.id, title: '<feature title>', description: '<feature description>', priority: 'medium', status: 'build', position: 0,
+    branch: null, worktreePath: null, sessionId: null, agentStatus: null, currentRunId: null, dependsOn: [], blockedBy: [], gate: null, baseRef: null,
+    prUrl: null, prNumber: null, createdAt: '', updatedAt: '',
+  };
+  const branch = 'feature/<slug>';
+  const roles = Object.fromEntries(
+    CLAUDE_ROLES.map((role) => {
+      const cfg = resolveLaunchConfig(project, settings, role);
+      const prompt =
+        role === 'planner' ? buildPlanPrompt(sampleFeature, project, branch, cfg)
+          : role === 'tester' ? buildTesterPrompt(sampleFeature, project, branch, project.baseBranch, cfg)
+            : role === 'reviewer' ? buildReviewerPrompt(sampleFeature, project, branch, project.baseBranch, cfg)
+              : buildPrompt(sampleFeature, project, branch, 1, cfg);
+      return [role, { config: cfg, command: previewCommand(settings.claudeBinary, buildClaudeArgs(prompt, cfg)), prompt }];
+    }),
   );
-  return { config: cfg, command: previewCommand(settings.claudeBinary, buildClaudeArgs(sample, cfg)), prompt: sample };
+  const dev = roles.developer;
+  return { config: dev.config, command: dev.command, prompt: dev.prompt, roles };
 }));
+/** Validation commands that would run if none are configured (detected from the main checkout). */
+api.get('/projects/:id/validation-preview', h((req) => detectValidationCommands(getProject(req.params.id).path)));
 api.delete('/projects/:id', h(async (req) => {
   const features = listFeatures(req.params.id);
   if (features.some((f) => f.agentStatus && ACTIVE_AGENT_STATUSES.includes(f.agentStatus))) {
@@ -105,13 +144,15 @@ api.patch('/features/:id', h(async (req) => {
   }
   if (status && status !== feature.status) {
     if (status === 'build') {
-      feature = orchestrator.enqueue(id);
+      feature = orchestrator.startFeature(id);
     } else {
       if (isActive(id)) {
         if (!confirmCancel) throw new HttpError(409, 'An agent is working on this feature. Confirm to cancel it.');
         await orchestrator.cancel(id);
       }
+      if (getFeature(id).gate) patchFeatureState(id, { gate: null });
       feature = moveFeature(id, status, typeof position === 'number' ? position : undefined);
+      orchestrator.tick(); // dependents may be unblocked
     }
   }
   if (typeof position === 'number' && feature.position !== position) {
@@ -129,6 +170,28 @@ api.delete('/features/:id', h(async (req) => {
   return { ok: true, note: 'Feature removed. Its branch and worktree (if any) were kept on disk.' };
 }));
 
+api.put('/features/:id/dependencies', h((req) => {
+  const ids = req.body?.dependsOn;
+  if (!Array.isArray(ids)) throw new HttpError(400, 'dependsOn must be an array of feature ids');
+  const f = setDependencies(req.params.id, ids);
+  orchestrator.tick();
+  return f;
+}));
+api.post('/features/:id/gate', h((req) => {
+  const { action, comment, answers } = req.body ?? {};
+  if (!['approve', 'reject', 'answer'].includes(action)) throw new HttpError(400, 'action must be approve, reject or answer');
+  return orchestrator.resolveGate(req.params.id, action, { comment, answers });
+}));
+api.post('/features/:id/pr', h((req) => createPrForFeature(req.params.id)));
+api.get('/features/:id/diff', h(async (req) => {
+  const f = getFeature(req.params.id);
+  if (!f.worktreePath || !fs.existsSync(f.worktreePath)) throw new HttpError(404, 'Worktree does not exist');
+  const p = getProject(f.projectId);
+  const scope = String(req.query.scope || 'all');
+  if (!['all', 'committed', 'uncommitted'].includes(scope) && !/^commit:[0-9a-f]{4,40}$/i.test(scope)) throw new HttpError(400, 'Invalid scope');
+  const file = req.query.file ? String(req.query.file) : undefined;
+  return getDiff(f.worktreePath, f.baseRef || p.baseBranch, scope as DiffScope, file);
+}));
 api.post('/features/:id/cancel', h((req) => orchestrator.cancel(req.params.id)));
 api.post('/features/:id/retry', h((req) => orchestrator.retry(req.params.id)));
 api.get('/features/:id/runs', h((req) => listRunsForFeature(req.params.id)));
@@ -136,7 +199,7 @@ api.get('/features/:id/runs', h((req) => listRunsForFeature(req.params.id)));
 api.get('/features/:id/changes', h(async (req) => {
   const f = getFeature(req.params.id);
   const p = getProject(f.projectId);
-  return collectChanges(f.worktreePath, f.branch, p.baseBranch);
+  return collectChanges(f.worktreePath, f.branch, f.baseRef || p.baseBranch);
 }));
 
 function existingWorktree(featureId: string): string {

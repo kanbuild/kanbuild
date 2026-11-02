@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Changes, CommitInfo, FileChange, PathValidation } from '../../shared/types.ts';
+import { parseUnifiedDiff } from './diffParse.ts';
+import type { Changes, CommitInfo, DiffFile, DiffResult, FileChange, PathValidation } from '../../shared/types.ts';
 
 export class GitError extends Error {
   constructor(message: string, public stderr = '') {
@@ -19,6 +20,19 @@ export function git(cwd: string, args: string[], opts: { allowFail?: boolean } =
       }
     });
   });
+}
+
+/** Run git and report only whether it exited with status 0. */
+export function gitOk(cwd: string, args: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (err) => resolve(!err));
+  });
+}
+
+/** Is `branch` fully merged into `into` (in repository `repo`)? */
+export async function isMerged(repo: string, branch: string, into: string): Promise<boolean> {
+  if (!(await branchExists(repo, branch))) return true; // deleted after merging
+  return gitOk(repo, ['merge-base', '--is-ancestor', `refs/heads/${branch}`, into]);
 }
 
 export function expandHome(p: string): string {
@@ -185,4 +199,66 @@ export async function collectChanges(
   }
   changes.files.sort((a, b) => a.path.localeCompare(b.path));
   return changes;
+}
+
+const MAX_DIFF_LINES = 4000;
+const MAX_FILE_LINES = 20000;
+const MAX_UNTRACKED = 50;
+
+export type DiffScope = 'all' | 'committed' | 'uncommitted' | `commit:${string}`;
+
+/**
+ * Diff of a feature worktree, parsed for the diff viewer.
+ * - all:         working tree (incl. uncommitted and untracked files) vs. the merge-base with the base ref
+ * - committed:   merge-base..HEAD
+ * - uncommitted: working tree vs HEAD (incl. untracked files)
+ * - commit:<sha> a single commit
+ * Large diffs are truncated per file; request a single file with `file` to load it in full.
+ */
+export async function getDiff(worktree: string, baseRef: string, scope: DiffScope = 'all', file?: string): Promise<DiffResult> {
+  const common = ['-c', 'core.quotePath=false'];
+  const opts = ['--no-color', '--no-ext-diff', '-M', '-U3'];
+  const pathspec = file ? ['--', file] : [];
+  let base: string | null = null;
+  let raw = '';
+  if (scope.startsWith('commit:')) {
+    const sha = scope.slice('commit:'.length);
+    if (!/^[0-9a-f]{4,40}$/i.test(sha)) throw new GitError('Invalid commit');
+    base = sha;
+    raw = await git(worktree, [...common, 'show', '--format=', ...opts, sha, ...pathspec]);
+  } else {
+    if (scope !== 'uncommitted') {
+      base = (await git(worktree, ['merge-base', baseRef, 'HEAD'], { allowFail: true })).trim() || null;
+    }
+    if (scope === 'committed') {
+      raw = base ? await git(worktree, [...common, 'diff', ...opts, `${base}..HEAD`, ...pathspec]) : '';
+    } else {
+      const against = scope === 'uncommitted' ? 'HEAD' : base ?? 'HEAD';
+      raw = await git(worktree, [...common, 'diff', ...opts, against, ...pathspec]);
+      // Untracked files are not part of `git diff`; diff them against /dev/null without touching the index.
+      const untracked = (await git(worktree, ['ls-files', '--others', '--exclude-standard', ...pathspec], { allowFail: true }))
+        .split('\n')
+        .filter(Boolean)
+        .slice(0, MAX_UNTRACKED);
+      for (const f of untracked) {
+        raw += await git(worktree, [...common, 'diff', ...opts, '--no-index', '--', '/dev/null', f], { allowFail: true });
+      }
+    }
+  }
+  const files = parseUnifiedDiff(raw);
+  return { scope, base, ...truncate(files, file ? MAX_FILE_LINES : MAX_DIFF_LINES) };
+}
+
+function truncate(files: DiffFile[], budget: number): { files: DiffFile[]; truncated: boolean } {
+  let used = 0;
+  let truncated = false;
+  for (const f of files) {
+    const n = f.hunks.reduce((a, h) => a + h.lines.length, 0);
+    if (used + n > budget && n > 0) {
+      f.hunks = [];
+      f.truncated = true;
+      truncated = true;
+    } else used += n;
+  }
+  return { files, truncated };
 }

@@ -1,4 +1,4 @@
-import type { AgentProfile, Effort, Project, Settings } from '../../shared/types.ts';
+import type { AgentProfile, AgentRole, Effort, Project, Settings } from '../../shared/types.ts';
 
 /**
  * Built-in tools available to agents in the lean profile. Everything else (web tools, sub-agents,
@@ -6,6 +6,29 @@ import type { AgentProfile, Effort, Project, Settings } from '../../shared/types
  * re-sent on every turn and prevents sub-agents from spawning extra full contexts.
  */
 export const LEAN_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'];
+
+/** Tools for read-only roles (planner, reviewer): no Edit/Write. */
+export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep', 'Bash'];
+export const READ_ONLY_ALLOWED = [
+  'Read',
+  'Glob',
+  'Grep',
+  'Bash(git status:*)',
+  'Bash(git diff:*)',
+  'Bash(git log:*)',
+  'Bash(git show:*)',
+  'Bash(git branch:*)',
+  'Bash(git rev-parse:*)',
+  'Bash(ls:*)',
+  'Bash(cat:*)',
+  'Bash(head:*)',
+  'Bash(tail:*)',
+  'Bash(wc:*)',
+  'Bash(grep:*)',
+];
+export const DISALLOWED_FOR_READ_ONLY = ['Edit', 'Write', 'NotebookEdit'];
+
+export const isReadOnlyRole = (role: AgentRole | undefined) => role === 'planner' || role === 'reviewer';
 
 export const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -16,18 +39,26 @@ export interface LaunchConfig {
   maxBudgetUsd: number | null;
   mcpConfig: string | null;
   allowedTools: string[];
+  /** Planner/reviewer: no file edits. */
+  readOnly: boolean;
+  role: AgentRole;
 }
 
 /** Merge global settings with project overrides. Empty project values mean "inherit". */
-export function resolveLaunchConfig(project: Project, settings: Settings): LaunchConfig {
-  const effort = (project.effort || settings.effort || '') as Effort | '';
+/** Role overrides (project.roles) win over project settings, which win over global settings. */
+export function resolveLaunchConfig(project: Project, settings: Settings, role: AgentRole = 'developer'): LaunchConfig {
+  const roleCfg = role !== 'validator' ? project.roles?.[role] : undefined;
+  const effort = (roleCfg?.effort || project.effort || settings.effort || '') as Effort | '';
+  const readOnly = isReadOnlyRole(role);
   return {
     profile: project.agentProfile || settings.agentProfile || 'lean',
     effort: effort && EFFORTS.includes(effort) ? effort : null,
-    model: project.model || settings.defaultModel || null,
+    model: roleCfg?.model || project.model || settings.defaultModel || null,
     maxBudgetUsd: settings.maxBudgetUsd && settings.maxBudgetUsd > 0 ? settings.maxBudgetUsd : null,
     mcpConfig: project.mcpConfig?.trim() || null,
-    allowedTools: project.allowedTools,
+    allowedTools: readOnly ? READ_ONLY_ALLOWED : project.allowedTools,
+    readOnly,
+    role,
   };
 }
 
@@ -43,14 +74,16 @@ export function resolveLaunchConfig(project: Project, settings: Settings): Launc
  *    and .claude/settings.json still apply; user-level plugins, hooks, agents and ~/.claude/CLAUDE.md do not.
  */
 export function buildClaudeArgs(prompt: string, cfg: LaunchConfig, opts: { resumeSessionId?: string | null } = {}): string[] {
-  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits'];
+  // Read-only roles run in the default permission mode: anything outside the read-only allowlist is denied.
+  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--permission-mode', cfg.readOnly ? 'default' : 'acceptEdits'];
   if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId);
   if (cfg.allowedTools.length) args.push('--allowedTools', cfg.allowedTools.join(','));
+  if (cfg.readOnly) args.push('--disallowedTools', DISALLOWED_FOR_READ_ONLY.join(','));
   if (cfg.model) args.push('--model', cfg.model);
   if (cfg.effort) args.push('--effort', cfg.effort);
   if (cfg.maxBudgetUsd) args.push('--max-budget-usd', String(cfg.maxBudgetUsd));
   if (cfg.profile === 'lean') {
-    args.push('--tools', LEAN_TOOLS.join(','));
+    args.push('--tools', (cfg.readOnly ? READ_ONLY_TOOLS : LEAN_TOOLS).join(','));
     args.push('--disable-slash-commands');
     args.push('--setting-sources', 'project,local');
     args.push('--strict-mcp-config');

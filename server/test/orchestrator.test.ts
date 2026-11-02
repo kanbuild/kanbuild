@@ -54,7 +54,8 @@ describe('end-to-end orchestration with a fake Claude Code', () => {
   it('runs features concurrently up to the limit, queues the rest, and reports', async () => {
     const { projects, features, settings, runs, orch } = mods;
     settings.updateSettings({ concurrency: 2 });
-    const project = await projects.createProject({ path: repo });
+    // Classic single-agent flow: no plan, validation, tester or reviewer.
+    const project = await projects.createProject({ path: repo, pipeline: { plan: false, validate: false, tester: false, reviewer: false } });
     expect(project.worktreeRoot).toBe(path.join(tmp, 'Tiles-worktrees'));
     const f = ['Portfolio charts', 'Onboarding', 'Account settings'].map((t) =>
       features.createFeature(project.id, { title: t, description: 'Do it well' }),

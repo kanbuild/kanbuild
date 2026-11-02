@@ -1,17 +1,35 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { RUNS_DIR, now } from './db.ts';
-import { getFeature, moveFeature, patchFeatureState, publishFeature } from './features.ts';
-import { allocateBranchAndPath, collectChanges, createWorktree, headCommit } from './git.ts';
+import { chooseBaseRef } from './dependencies.ts';
+import { dependencyRefs, getFeature, moveFeature, patchFeatureState, publishFeature } from './features.ts';
+import { allocateBranchAndPath, collectChanges, createWorktree, headCommit, isMerged } from './git.ts';
+import { getToken } from './github.ts';
+import { notify } from './notify.ts';
+import { firstStep, nextStep, stepLabel, type StepRun } from './pipeline.ts';
+import { createPrForFeature } from './pr.ts';
 import { estimateCost, estimateCostByModel } from './pricing.ts';
 import { HttpError, getProject } from './projects.ts';
-import { buildFollowupPrompt, buildPrompt } from './prompt.ts';
+import {
+  buildAnswerPrompt,
+  buildFixPrompt,
+  buildFollowupPrompt,
+  buildImplementPlanPrompt,
+  buildPlanPrompt,
+  buildPrompt,
+  buildReplanPrompt,
+  buildReviewerPrompt,
+  buildTesterPrompt,
+  fixMessage,
+  formatAnswers,
+} from './prompt.ts';
 import { buildClaudeArgs, previewCommand, resolveLaunchConfig } from './launch.ts';
-import { buildReport, extractSelfReport } from './report.ts';
+import { buildReport, buildValidationReport, extractSelfReport } from './report.ts';
 import { LogTail, isAlive, killGroup, launchDetached, readExitCode, readStderrTail } from './runner.ts';
-import { addEvent, createRun, getRun, listRunsByStatus, updateRun, type RunRow } from './runs.ts';
+import { addEvent, createRun, getReport, getRun, latestCycle, listCycleRuns, listRunsByStatus, listRunsForFeature, updateRun, type NewRun, type RunRow } from './runs.ts';
 import { getSettings } from './settings.ts';
-import { ACTIVE_AGENT_STATUSES, type AgentStatus, type Feature, type RunKind } from '../../shared/types.ts';
+import { ValidationRun, installCommand, resolveValidationCommands } from './validation.ts';
+import { ACTIVE_AGENT_STATUSES, type AgentStatus, type Feature, type Gate, type Project } from '../../shared/types.ts';
 
 const CANCEL_MARK = 'Cancellation requested';
 
@@ -25,49 +43,119 @@ interface ActiveRun {
   flushTimer: NodeJS.Timeout | null;
 }
 
+/** Roles whose Claude Code session is "the feature's session" (followed up, resumed, opened in a terminal). */
+const sessionOwner = (role: string) => role === 'planner' || role === 'developer';
+
 /**
- * Agent Orchestrator + Execution Queue.
- * Queue state lives in SQLite (runs with status 'queued'), so it survives restarts.
+ * Agent Orchestrator + Execution Queue + Pipeline driver.
+ * Queue state lives in SQLite (runs with status 'queued'), so it survives restarts. Every pipeline
+ * decision is derived from the cycle's run history (see pipeline.ts), so it survives restarts too.
  */
 export class Orchestrator {
   private active = new Map<string, ActiveRun>();
+  private validations = new Map<string, ValidationRun>();
   private starting = new Set<string>();
   private ticking = false;
 
-  /** Start (or restart) development of a feature: create a run and enqueue it. */
-  enqueue(featureId: string, kind: RunKind = 'feature', message: string | null = null): Feature {
-    const feature = getFeature(featureId);
+  private assertIdle(feature: Feature) {
     if (feature.agentStatus && ACTIVE_AGENT_STATUSES.includes(feature.agentStatus)) {
       throw new HttpError(409, 'An agent is already assigned to this feature');
     }
-    const run = createRun(featureId, kind, message);
-    addEvent(run.id, 'lifecycle', kind === 'followup' ? `Follow-up (run #${run.attempt}) queued: ${message}` : `Run #${run.attempt} queued`);
-    patchFeatureState(featureId, { status: 'build', agentStatus: 'queued', currentRunId: run.id });
+  }
+
+  /** Card entered Build: start a new pipeline cycle (plan first, if enabled). */
+  startFeature(featureId: string): Feature {
+    const feature = getFeature(featureId);
+    this.assertIdle(feature);
+    const project = getProject(feature.projectId);
+    const step = firstStep(project.pipeline, 'start');
+    return this.enqueueRun(featureId, { ...step, cycle: latestCycle(featureId) + 1 });
+  }
+
+  /** Back-compat alias used by older callers/tests. */
+  enqueue(featureId: string): Feature {
+    return this.startFeature(featureId);
+  }
+
+  private enqueueRun(featureId: string, opts: NewRun & { cycle: number }): Feature {
+    const feature = getFeature(featureId);
+    const run = createRun(featureId, opts);
+    const label = stepLabel(run.kind, run.role, run.fixReason);
+    addEvent(run.id, 'lifecycle', `${label} queued (run #${run.attempt}, cycle ${run.cycle})${run.kind === 'followup' && run.message ? `: ${run.message}` : ''}`);
+    patchFeatureState(featureId, { status: 'build', agentStatus: 'queued', currentRunId: run.id, gate: null });
     if (feature.status !== 'build') moveFeature(featureId, 'build');
     setImmediate(() => this.tick());
     return getFeature(featureId);
   }
 
+  /** Retry the current pipeline step (same kind/role/message), or start over when nothing ran yet. */
   retry(featureId: string): Feature {
-    return this.enqueue(featureId);
+    const feature = getFeature(featureId);
+    this.assertIdle(feature);
+    const run = feature.currentRunId ? getRun(feature.currentRunId) : null;
+    if (!run) return this.startFeature(featureId);
+    return this.enqueueRun(featureId, { kind: run.kind, role: run.role, message: run.message, fixReason: run.fixReason, cycle: run.cycle });
   }
 
-  /** Continue the feature's existing Claude Code session (`--resume`) with a new instruction. */
+  /** Continue the feature's existing Claude Code session (`--resume`) with a new instruction (new cycle). */
   followUp(featureId: string, message: string): Feature {
     const text = message.trim();
     if (!text) throw new HttpError(400, 'A follow-up message is required');
     const feature = getFeature(featureId);
+    this.assertIdle(feature);
     if (!feature.sessionId) throw new HttpError(409, 'This feature has no Claude Code session to continue yet');
     if (!feature.worktreePath || !fs.existsSync(feature.worktreePath)) {
       throw new HttpError(409, 'The worktree no longer exists, so the session cannot be resumed there');
     }
-    return this.enqueue(featureId, 'followup', text);
+    return this.enqueueRun(featureId, { kind: 'followup', role: 'developer', message: text, cycle: latestCycle(featureId) + 1 });
+  }
+
+  /** Act on an open approval / clarification checkpoint. */
+  resolveGate(featureId: string, action: 'approve' | 'reject' | 'answer', input: { comment?: string; answers?: string[] } = {}): Feature {
+    const feature = getFeature(featureId);
+    const gate = feature.gate;
+    if (!gate) throw new HttpError(409, 'There is no open checkpoint for this feature');
+    this.assertIdle(feature);
+    const gateRun = getRun(gate.runId);
+    if (!gateRun) throw new HttpError(409, 'The checkpoint refers to a run that no longer exists');
+    const cycle = gateRun.cycle;
+    const comment = input.comment?.trim() || '';
+    addEvent(gateRun.id, 'lifecycle', `Checkpoint "${gate.type.replace('_', ' ')}": ${action}${comment ? ` — ${comment}` : ''}`);
+
+    if (gate.type === 'plan_approval') {
+      if (action === 'approve') return this.enqueueRun(featureId, { kind: 'feature', role: 'developer', message: comment || null, cycle });
+      if (action === 'reject') {
+        if (!comment) throw new HttpError(400, 'Describe what should change in the plan');
+        return this.enqueueRun(featureId, { kind: 'plan', role: 'planner', message: comment, cycle });
+      }
+    }
+    if (gate.type === 'clarification' && action === 'answer') {
+      const answers = Array.isArray(input.answers) ? input.answers.map(String) : [];
+      if (!answers.some((a) => a.trim())) throw new HttpError(400, 'Answer at least one question');
+      const message = formatAnswers(gate.questions ?? [], answers);
+      return this.enqueueRun(featureId, { kind: 'answer', role: gate.role ?? gateRun.role, message, cycle });
+    }
+    if (gate.type === 'final_approval') {
+      if (action === 'approve') {
+        this.complete(featureId);
+        return getFeature(featureId);
+      }
+      if (action === 'reject') {
+        if (!comment) throw new HttpError(400, 'Describe the changes you want');
+        return this.enqueueRun(featureId, { kind: 'fix', role: 'developer', fixReason: 'user', message: fixMessage('user', { comment }), cycle });
+      }
+    }
+    throw new HttpError(400, `Action "${action}" is not valid for this checkpoint`);
   }
 
   async cancel(featureId: string): Promise<Feature> {
     const feature = getFeature(featureId);
     const runId = feature.currentRunId;
     const run = runId ? getRun(runId) : null;
+    if (feature.gate && (!run || !ACTIVE_AGENT_STATUSES.includes(run.status))) {
+      addEvent(feature.gate.runId, 'lifecycle', 'Checkpoint closed: pipeline cancelled by user');
+      return patchFeatureState(featureId, { gate: null, agentStatus: 'cancelled' });
+    }
     if (!run || !ACTIVE_AGENT_STATUSES.includes(run.status)) {
       throw new HttpError(409, 'No active agent run to cancel');
     }
@@ -75,9 +163,14 @@ export class Orchestrator {
       this.finishWithoutProcess(run, 'cancelled', 'Cancelled before start');
       return getFeature(featureId);
     }
+    addEvent(run.id, 'lifecycle', 'Cancellation requested');
+    const validation = this.validations.get(run.id);
+    if (validation) {
+      validation.cancel();
+      return getFeature(featureId);
+    }
     const active = this.active.get(run.id);
     if (active) active.cancelRequested = true;
-    addEvent(run.id, 'lifecycle', 'Cancellation requested');
     updateRun(run.id, { currentActivity: 'Cancelling…', error: CANCEL_MARK });
     if (run.pid) {
       killGroup(run.pid, 'SIGTERM');
@@ -91,11 +184,12 @@ export class Orchestrator {
     return getFeature(featureId);
   }
 
+  /** Agent processes holding a concurrency slot (validation commands don't count). */
   runningCount(): number {
-    return listRunsByStatus(['initialising', 'running']).length;
+    return listRunsByStatus(['initialising', 'running']).filter((r) => r.role !== 'validator').length;
   }
 
-  /** Fill free execution slots from the queue (FIFO). */
+  /** Fill free execution slots from the queue (FIFO), skipping features waiting for dependencies. */
   tick() {
     if (this.ticking) return;
     this.ticking = true;
@@ -103,28 +197,70 @@ export class Orchestrator {
       const { concurrency } = getSettings();
       let running = this.runningCount();
       const queued = listRunsByStatus(['queued']).filter((r) => !this.starting.has(r.id));
+      const waiting: RunRow[] = [];
       for (const run of queued) {
-        if (running >= concurrency) break;
-        running++;
+        const feature = getFeatureSafe(run.featureId);
+        if (!feature) continue;
+        const needsWorktree = !feature.worktreePath || !fs.existsSync(feature.worktreePath);
+        if (needsWorktree && feature.blockedBy.length) {
+          const activity = `Waiting for dependencies: ${feature.blockedBy.map((d) => d.title).join(', ')}`;
+          if (run.currentActivity !== activity) {
+            updateRun(run.id, { currentActivity: activity });
+            publishFeature(run.featureId);
+          }
+          continue;
+        }
+        if (run.role !== 'validator') {
+          if (running >= concurrency) {
+            waiting.push(run);
+            continue;
+          }
+          running++;
+        }
         this.starting.add(run.id);
         // Mark synchronously so concurrent ticks see the slot as taken.
-        updateRun(run.id, { status: 'initialising', stage: 'initialising', currentActivity: 'Preparing git worktree', startedAt: now() });
+        updateRun(run.id, {
+          status: 'initialising',
+          stage: 'initialising',
+          currentActivity: needsWorktree ? 'Preparing git worktree' : 'Starting',
+          startedAt: now(),
+        });
         patchFeatureState(run.featureId, { agentStatus: 'initialising' });
         this.start(run.id).finally(() => this.starting.delete(run.id));
       }
-      this.updateQueuePositions();
+      waiting.forEach((r, i) => {
+        const activity = `Queued (${i + 1} of ${waiting.length}) — waiting for an execution slot`;
+        if (r.currentActivity !== activity) updateRun(r.id, { currentActivity: activity });
+        publishFeature(r.featureId);
+      });
     } finally {
       this.ticking = false;
     }
   }
 
-  private updateQueuePositions() {
-    const queued = listRunsByStatus(['queued']);
-    queued.forEach((r, i) => {
-      const activity = `Queued (${i + 1} of ${queued.length}) — waiting for an execution slot`;
-      if (r.currentActivity !== activity) updateRun(r.id, { currentActivity: activity });
-      publishFeature(r.featureId);
-    });
+  /** Create the branch + worktree, stacked on an unmerged dependency when needed. */
+  private async ensureWorktree(runId: string, feature: Feature, project: Project): Promise<{ branch: string; worktreePath: string; baseRef: string }> {
+    let { branch, worktreePath } = feature;
+    if (branch && worktreePath && fs.existsSync(worktreePath)) {
+      addEvent(runId, 'lifecycle', `Reusing existing worktree ${worktreePath} (branch ${branch})`);
+      return { branch, worktreePath, baseRef: feature.baseRef || project.baseBranch };
+    }
+    if (branch && worktreePath) addEvent(runId, 'warning', `Previous worktree ${worktreePath} no longer exists; creating a new one`);
+    const deps = await Promise.all(
+      dependencyRefs(feature.id).map(async (d) => {
+        const dep = getFeatureSafe(d.id);
+        const depBranch = dep?.branch ?? null;
+        return { title: d.title, branch: depBranch, merged: depBranch ? await isMerged(project.path, depBranch, project.baseBranch) : true };
+      }),
+    );
+    const choice = chooseBaseRef(project.baseBranch, deps);
+    if ('error' in choice) throw new Error(choice.error);
+    const alloc = await allocateBranchAndPath(project.path, project.worktreeRoot, feature.title, feature.id);
+    if (choice.stackedOn) addEvent(runId, 'lifecycle', `Stacking on dependency "${choice.stackedOn}" (branch ${choice.ref}, not merged into ${project.baseBranch} yet)`);
+    addEvent(runId, 'lifecycle', `Creating worktree ${alloc.worktreePath} on branch ${alloc.branch} from ${choice.ref}`);
+    await createWorktree(project.path, alloc.worktreePath, alloc.branch, choice.ref);
+    patchFeatureState(feature.id, { branch: alloc.branch, worktreePath: alloc.worktreePath, baseRef: choice.ref });
+    return { ...alloc, baseRef: choice.ref };
   }
 
   private async start(runId: string) {
@@ -138,42 +274,80 @@ export class Orchestrator {
     }
     const project = getProject(feature.projectId);
     const settings = getSettings();
-    addEvent(runId, 'lifecycle', 'Initialising');
+    addEvent(runId, 'lifecycle', `Initialising: ${stepLabel(run.kind, run.role, run.fixReason)}`);
 
     try {
-      // 1-3. Branch + isolated worktree (reused on retry if it still exists).
-      let branch = feature.branch;
-      let worktreePath = feature.worktreePath;
-      const followup = run.kind === 'followup';
-      if (followup && (!branch || !worktreePath || !fs.existsSync(worktreePath) || !feature.sessionId)) {
-        throw new Error('Cannot resume: the worktree or Claude Code session is missing');
+      const resumesSession = run.kind === 'followup' || run.kind === 'fix';
+      if (resumesSession && (!feature.worktreePath || !fs.existsSync(feature.worktreePath))) {
+        throw new Error('Cannot continue: the worktree is missing');
       }
-      if (!branch || !worktreePath || !fs.existsSync(worktreePath)) {
-        if (branch && worktreePath && !fs.existsSync(worktreePath)) {
-          addEvent(runId, 'warning', `Previous worktree ${worktreePath} no longer exists; creating a new one`);
-        }
-        const alloc = await allocateBranchAndPath(project.path, project.worktreeRoot, feature.title, feature.id);
-        branch = alloc.branch;
-        worktreePath = alloc.worktreePath;
-        addEvent(runId, 'lifecycle', `Creating worktree ${worktreePath} on branch ${branch} from ${project.baseBranch}`);
-        await createWorktree(project.path, worktreePath, branch, project.baseBranch);
-        patchFeatureState(feature.id, { branch, worktreePath });
-      } else {
-        addEvent(runId, 'lifecycle', `Reusing existing worktree ${worktreePath} (branch ${branch})`);
-      }
-
+      const { branch, worktreePath, baseRef } = await this.ensureWorktree(runId, feature, project);
+      feature = getFeature(feature.id);
       if (this.wasCancelledMeanwhile(runId)) return;
 
-      // 4-6. Launch Claude Code inside the worktree.
+      if (run.role === 'validator') {
+        await this.runValidation(run, feature, project, worktreePath);
+        return;
+      }
+
+      // Pick the prompt and the session to resume for this step.
+      const cfg = resolveLaunchConfig(project, settings, run.role);
+      const cycleRuns = listCycleRuns(feature.id, run.cycle);
+      const planned = cycleRuns.some((r) => r.role === 'planner' && r.status === 'completed' && r.sessionId);
+      let prompt: string;
+      let resume: string | null = null;
+      switch (run.kind) {
+        case 'plan':
+          if (run.message && feature.sessionId) {
+            prompt = buildReplanPrompt(run.message);
+            resume = feature.sessionId;
+          } else prompt = buildPlanPrompt(feature, project, branch, cfg, baseRef);
+          break;
+        case 'feature':
+          if (planned && feature.sessionId) {
+            prompt = buildImplementPlanPrompt(project, branch, cfg, run.message);
+            resume = feature.sessionId;
+          } else {
+            const attempt = listRunsForFeature(feature.id).filter((r) => r.kind === 'feature' && r.attempt <= run.attempt).length;
+            prompt = buildPrompt(feature, project, branch, attempt, cfg, baseRef);
+          }
+          break;
+        case 'fix':
+          prompt = buildFixPrompt(run.fixReason ?? 'user', run.message ?? '', project, branch, cfg);
+          resume = feature.sessionId;
+          if (!resume) prompt = `${buildPrompt(feature, project, branch, 2, cfg, baseRef)}\n\n# Also fix\n${run.message ?? ''}`;
+          break;
+        case 'test':
+          prompt = buildTesterPrompt(feature, project, branch, baseRef, cfg);
+          break;
+        case 'review':
+          prompt = buildReviewerPrompt(feature, project, branch, baseRef, cfg);
+          break;
+        case 'answer': {
+          const asker = [...cycleRuns].reverse().find((r) => r.attempt < run.attempt && r.role === run.role && r.sessionId);
+          resume = asker?.sessionId ?? (sessionOwner(run.role) ? feature.sessionId : null);
+          if (!resume) throw new Error('Cannot find the session that asked the questions');
+          prompt = buildAnswerPrompt(run.role, run.message ?? '');
+          break;
+        }
+        case 'followup':
+        default:
+          if (!feature.sessionId) throw new Error('Cannot resume: the Claude Code session is missing');
+          prompt = buildFollowupPrompt(run.message ?? '', branch);
+          resume = feature.sessionId;
+      }
+
       const logDir = path.join(RUNS_DIR, runId);
-      const cfg = resolveLaunchConfig(project, settings);
-      const prompt = followup ? buildFollowupPrompt(run.message ?? '', branch) : buildPrompt(feature, project, branch, run.attempt, cfg);
-      const args = buildClaudeArgs(prompt, cfg, { resumeSessionId: followup ? feature.sessionId : null });
-      const model = cfg.model;
+      const args = buildClaudeArgs(prompt, cfg, { resumeSessionId: resume });
       fs.mkdirSync(logDir, { recursive: true });
       fs.writeFileSync(path.join(logDir, 'prompt.md'), prompt);
       fs.writeFileSync(path.join(logDir, 'command.txt'), previewCommand(settings.claudeBinary, args) + '\n');
-      addEvent(runId, 'system', `Launch profile: ${cfg.profile}${cfg.effort ? `, effort ${cfg.effort}` : ''}${cfg.maxBudgetUsd ? `, budget $${cfg.maxBudgetUsd}` : ''}${followup ? `, resuming session ${feature.sessionId}` : ''}`, previewCommand(settings.claudeBinary, args));
+      addEvent(
+        runId,
+        'system',
+        `Launch: ${run.role} (${cfg.readOnly ? 'read-only' : 'can edit'}), profile ${cfg.profile}${cfg.model ? `, model ${cfg.model}` : ''}${cfg.effort ? `, effort ${cfg.effort}` : ''}${cfg.maxBudgetUsd ? `, budget $${cfg.maxBudgetUsd}` : ''}${resume ? `, resuming session ${resume}` : ', new session'}`,
+        previewCommand(settings.claudeBinary, args),
+      );
 
       const pid = launchDetached({ logDir, cwd: worktreePath, binary: settings.claudeBinary, args });
       updateRun(runId, {
@@ -181,17 +355,101 @@ export class Orchestrator {
         pid,
         logDir,
         logOffset: 0,
-        stage: 'planning',
+        stage: run.role === 'reviewer' ? 'reviewing' : run.role === 'tester' ? 'testing' : 'planning',
         currentActivity: 'Starting Claude Code',
-        model: model || null,
+        model: cfg.model || null,
       });
       patchFeatureState(feature.id, { agentStatus: 'running' });
       addEvent(runId, 'lifecycle', `Claude Code launched (pid ${pid}) in ${worktreePath}`);
       this.attach(getRun(runId)!, 0);
     } catch (err: any) {
-      addEvent(runId, 'error', `Failed to start agent: ${err.message}`);
+      addEvent(runId, 'error', `Failed to start: ${err.message}`);
       this.finishWithoutProcess(getRun(runId)!, 'failed', err.message);
     }
+  }
+
+  /** Validator step: the orchestrator runs the project's validation commands itself (no agent, no tokens). */
+  private async runValidation(run: RunRow, feature: Feature, project: Project, worktreePath: string) {
+    const resolved = resolveValidationCommands(project.pipeline.validationCommands, worktreePath);
+    const install = installCommand(worktreePath);
+    const commands = [...(install && resolved.commands.length ? [install] : []), ...resolved.commands];
+    const startedAt = Date.now();
+    updateRun(run.id, { status: 'running', stage: 'validating', currentActivity: `Running ${commands.length} validation command(s)`, progress: 0 });
+    patchFeatureState(feature.id, { agentStatus: 'running' });
+    addEvent(run.id, 'system', `Validation commands (${resolved.source}): ${commands.join(' && ') || 'none'}`);
+
+    let done = 0;
+    let buffer = '';
+    let lastFlush = 0;
+    const flush = () => {
+      if (!buffer) return;
+      const lines = buffer.split('\n').filter((l) => l.trim());
+      if (lines.length) addEvent(run.id, 'tool_result', lines[lines.length - 1].slice(0, 300), buffer.slice(-4000));
+      buffer = '';
+      lastFlush = Date.now();
+    };
+    const v = new ValidationRun(worktreePath, commands, {
+      onStart: (c) => {
+        flush();
+        addEvent(run.id, 'tool_use', `Running: ${c}`);
+        updateRun(run.id, { currentActivity: `Running: ${c}` });
+      },
+      onOutput: (_c, chunk) => {
+        buffer += chunk + '\n';
+        if (Date.now() - lastFlush > 1000) flush();
+      },
+      onResult: (r) => {
+        flush();
+        done++;
+        const ok = r.exitCode === 0 && !r.timedOut;
+        addEvent(
+          run.id,
+          ok ? 'lifecycle' : 'error',
+          `${ok ? '✓' : '✗'} ${r.command} — ${r.timedOut ? 'timed out' : `exit ${r.exitCode}`} (${(r.durationMs / 1000).toFixed(1)}s)`,
+          ok ? null : r.output.split('\n').slice(-80).join('\n'),
+        );
+        updateRun(run.id, { progress: Math.round((done / Math.max(1, commands.length)) * 100) });
+      },
+    });
+    this.validations.set(run.id, v);
+    let results: Awaited<ReturnType<ValidationRun['run']>> = [];
+    try {
+      results = await v.run();
+    } finally {
+      this.validations.delete(run.id);
+    }
+    const failed = results.find((r) => r.exitCode !== 0 || r.timedOut);
+    const status: AgentStatus = v.wasCancelled ? 'cancelled' : failed ? 'failed' : 'completed';
+    const error = v.wasCancelled ? 'Cancelled by user' : failed ? `Validation failed: ${failed.command} (${failed.timedOut ? 'timed out' : `exit ${failed.exitCode}`})` : null;
+    const changes = await collectChanges(worktreePath, feature.branch, feature.baseRef || project.baseBranch);
+    const report = buildValidationReport({
+      runId: run.id,
+      feature,
+      project,
+      status,
+      results,
+      changes,
+      durationMs: Date.now() - startedAt,
+      note: commands.length ? undefined : `No validation commands configured or detected (${resolved.source}).`,
+    });
+    updateRun(run.id, {
+      status,
+      endedAt: now(),
+      error,
+      validation: results,
+      report,
+      progress: status === 'completed' ? 100 : null,
+      stage: status === 'completed' ? 'done' : 'validating',
+      currentActivity: status === 'completed' ? 'Validation passed' : status === 'cancelled' ? 'Cancelled' : 'Validation failed',
+      commitHash: changes.headCommit,
+    });
+    addEvent(run.id, status === 'completed' ? 'lifecycle' : 'error', `Validation ${status}${error ? `: ${error}` : ''}`);
+    const f = getFeatureSafe(run.featureId);
+    if (f && f.currentRunId === run.id) {
+      patchFeatureState(f.id, { agentStatus: status });
+      if (status !== 'cancelled') this.advance(f.id, run.id);
+    }
+    this.tick();
   }
 
   private wasCancelledMeanwhile(runId: string): boolean {
@@ -214,7 +472,7 @@ export class Orchestrator {
     const tail = new LogTail(run.logDir, run.pid, {
       onEvents: (events, offset) => {
         for (const e of events) addEvent(run.id, e.kind, e.summary, e.detail ?? null);
-        this.scheduleFlush(state, offset);
+        this.scheduleFlush(state, offset, run.role);
       },
       onStderr: (text) => {
         for (const line of text.split('\n').slice(-20)) if (line.trim()) addEvent(run.id, 'stderr', line.slice(0, 500));
@@ -229,7 +487,7 @@ export class Orchestrator {
   }
 
   /** Persist parser state at most ~once per second. */
-  private scheduleFlush(state: ActiveRun, offset: number) {
+  private scheduleFlush(state: ActiveRun, offset: number, role: string) {
     const doFlush = () => {
       state.flushTimer = null;
       state.lastFlush = Date.now();
@@ -247,10 +505,9 @@ export class Orchestrator {
         sessionId: p.sessionId ?? undefined,
         estimatedCostUsd: estimateCost(usage, model),
       });
-      if (p.sessionId) {
-        const f = getFeatureSafe(state.featureId);
-        if (f && f.sessionId !== p.sessionId) patchFeatureState(state.featureId, { sessionId: p.sessionId });
-        else publishFeature(state.featureId);
+      const f = getFeatureSafe(state.featureId);
+      if (p.sessionId && sessionOwner(role) && f && f.sessionId !== p.sessionId && f.currentRunId === state.runId) {
+        patchFeatureState(state.featureId, { sessionId: p.sessionId });
       } else publishFeature(state.featureId);
     };
     if (Date.now() - state.lastFlush > 1000) doFlush();
@@ -285,7 +542,7 @@ export class Orchestrator {
       if (stderr.trim() && !result) error += `\n${stderr.trim().slice(-1000)}`;
     }
 
-    updateRun(run.id, { stage: 'reporting', currentActivity: 'Generating implementation report' });
+    updateRun(run.id, { stage: 'reporting', currentActivity: 'Generating report' });
 
     const usage = parser.usage;
     const model = parser.model || run.model;
@@ -298,7 +555,7 @@ export class Orchestrator {
     if (feature) {
       try {
         const project = getProject(feature.projectId);
-        const changes = await collectChanges(feature.worktreePath, feature.branch, project.baseBranch);
+        const changes = await collectChanges(feature.worktreePath, feature.branch, feature.baseRef || project.baseBranch);
         commit = changes.headCommit ?? (feature.worktreePath ? await headCommit(feature.worktreePath) : null);
         report = buildReport({
           runId: run.id,
@@ -315,6 +572,8 @@ export class Orchestrator {
           error,
           metrics: parser.metrics,
           kind: run.kind,
+          role: run.role,
+          fixReason: run.fixReason,
           message: run.message,
         });
         if (report.self.tests.failed && report.self.tests.failed > 0) {
@@ -345,9 +604,92 @@ export class Orchestrator {
     addEvent(run.id, status === 'failed' ? 'error' : 'lifecycle', `Run ${status}${error ? `: ${error.split('\n')[0]}` : ''}`);
 
     if (feature && feature.currentRunId === run.id) {
-      patchFeatureState(feature.id, { agentStatus: status, sessionId: parser.sessionId ?? feature.sessionId });
-      // 10. Successful features move to Done automatically.
-      if (status === 'completed' && feature.status === 'build') moveFeature(feature.id, 'done');
+      patchFeatureState(feature.id, {
+        agentStatus: status,
+        sessionId: sessionOwner(run.role) ? parser.sessionId ?? feature.sessionId : feature.sessionId,
+      });
+      if (status === 'failed') {
+        notify({ title: `${stepLabel(run.kind, run.role, run.fixReason)} failed`, body: feature.title, level: 'error', featureId: feature.id, projectId: feature.projectId });
+      }
+      if (status !== 'cancelled') this.advance(feature.id, run.id);
+    }
+    this.tick();
+  }
+
+  /** Decide and apply the next pipeline step after a run finished. */
+  advance(featureId: string, runId: string) {
+    const feature = getFeatureSafe(featureId);
+    const run = getRun(runId);
+    if (!feature || !run || feature.currentRunId !== runId) return;
+    const project = getProject(feature.projectId);
+    const cycleRuns = listCycleRuns(featureId, run.cycle);
+    const history: StepRun[] = cycleRuns.map((r) => {
+      const self = getReport(r.id)?.self;
+      return {
+        kind: r.kind,
+        role: r.role,
+        status: r.status,
+        fixReason: r.fixReason,
+        questions: self?.needsClarification ?? [],
+        plan: self?.plan ?? '',
+        review: self?.review ?? null,
+        validation: r.validation,
+      };
+    });
+    const hasValidationCommands = resolveValidationCommands(project.pipeline.validationCommands, feature.worktreePath).commands.length > 0;
+    const decision = nextStep({ config: project.pipeline, hasValidationCommands }, history);
+    const last = history[history.length - 1];
+
+    switch (decision.type) {
+      case 'run': {
+        let message: string | null = null;
+        if (decision.fixReason === 'validation') message = fixMessage('validation', { validation: last.validation ?? [] });
+        if (decision.fixReason === 'review') message = fixMessage('review', { findings: last.review?.findings ?? [], reviewSummary: last.review?.summary });
+        addEvent(runId, 'lifecycle', `Next step: ${decision.reason}`);
+        this.enqueueRun(featureId, { kind: decision.kind, role: decision.role, fixReason: decision.fixReason ?? null, message, cycle: run.cycle });
+        return;
+      }
+      case 'gate': {
+        const gate: Gate = { ...decision.gate, runId, openedAt: now() };
+        patchFeatureState(featureId, { gate });
+        const meta = {
+          plan_approval: ['Plan ready for your approval', 'Waiting for plan approval'],
+          clarification: ['The agent has questions', 'Waiting for your answers'],
+          final_approval: ['Ready for your approval', 'Waiting for final approval'],
+        }[gate.type];
+        updateRun(runId, { currentActivity: meta[1] });
+        addEvent(runId, 'lifecycle', `Checkpoint: ${meta[1].toLowerCase()}`);
+        notify({ title: meta[0], body: feature.title, level: 'attention', featureId, projectId: feature.projectId });
+        return;
+      }
+      case 'done':
+        this.complete(featureId);
+        return;
+      case 'stop':
+        if (decision.error) {
+          updateRun(runId, { status: 'failed', error: decision.error, currentActivity: 'Pipeline stopped' });
+          patchFeatureState(featureId, { agentStatus: 'failed' });
+          addEvent(runId, 'error', decision.error);
+          notify({ title: 'Pipeline stopped', body: `${feature.title}: ${decision.error}`, level: 'error', featureId, projectId: feature.projectId });
+        }
+        return;
+      case 'idle':
+        return;
+    }
+  }
+
+  /** Pipeline finished (or the user approved it): move to Done and optionally open a PR. */
+  private complete(featureId: string) {
+    const feature = patchFeatureState(featureId, { gate: null, agentStatus: 'completed' });
+    if (feature.status !== 'done') moveFeature(featureId, 'done');
+    if (feature.currentRunId) addEvent(feature.currentRunId, 'lifecycle', 'Pipeline complete; feature moved to Done');
+    notify({ title: 'Feature done', body: feature.title, level: 'success', featureId, projectId: feature.projectId });
+    const project = getProject(feature.projectId);
+    if (project.pipeline.autoCreatePr && getToken() && !feature.prUrl) {
+      createPrForFeature(featureId).catch((err) => {
+        if (feature.currentRunId) addEvent(feature.currentRunId, 'error', `Automatic pull request failed: ${err.message}`);
+        notify({ title: 'Pull request failed', body: `${feature.title}: ${err.message}`, level: 'error', featureId, projectId: feature.projectId });
+      });
     }
     this.tick();
   }
@@ -356,20 +698,23 @@ export class Orchestrator {
     updateRun(run.id, { status, endedAt: now(), error, currentActivity: status === 'cancelled' ? 'Cancelled' : 'Failed' });
     addEvent(run.id, status === 'failed' ? 'error' : 'lifecycle', `Run ${status}: ${error}`);
     const feature = getFeatureSafe(run.featureId);
-    if (feature && feature.currentRunId === run.id) patchFeatureState(feature.id, { agentStatus: status });
+    if (feature && feature.currentRunId === run.id) {
+      patchFeatureState(feature.id, { agentStatus: status });
+      if (status === 'failed') notify({ title: `${stepLabel(run.kind, run.role, run.fixReason)} failed`, body: `${feature.title}: ${error.split('\n')[0]}`, level: 'error', featureId: feature.id, projectId: feature.projectId });
+    }
     this.tick();
   }
 
   /**
    * Startup reconciliation: reattach to agents still running, finalize those that finished
-   * while the backend was down, fail those that died, and resume the queue.
+   * while the backend was down, fail those that died, and resume the queue. Validation runs
+   * (in-process, idempotent) are simply re-queued. Open checkpoints live in the DB and need nothing.
    */
   recover() {
     for (const run of listRunsByStatus(['initialising', 'running'])) {
       if (!run.logDir || !run.pid) {
-        // Crashed during initialisation, before a process existed: put it back in the queue.
-        updateRun(run.id, { status: 'queued', stage: 'queued', currentActivity: 'Re-queued after restart' });
-        addEvent(run.id, 'warning', 'Backend restarted during initialisation; run re-queued');
+        updateRun(run.id, { status: 'queued', stage: 'queued', currentActivity: 'Re-queued after restart', progress: null });
+        addEvent(run.id, 'warning', run.role === 'validator' ? 'Backend restarted during validation; validation re-queued' : 'Backend restarted during initialisation; run re-queued');
         patchFeatureState(run.featureId, { agentStatus: 'queued' });
         continue;
       }
@@ -391,6 +736,8 @@ export class Orchestrator {
       if (a.killTimer) clearTimeout(a.killTimer);
     }
     this.active.clear();
+    for (const v of this.validations.values()) v.cancel();
+    this.validations.clear();
   }
 }
 
