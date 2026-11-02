@@ -5,7 +5,10 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
+  type CollisionDetection,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -31,6 +34,22 @@ const COLUMNS: { id: FeatureStatus; title: string; icon: React.ElementType; hint
 ];
 
 type ColumnsState = Record<FeatureStatus, string[]>;
+
+const COLUMN_IDS = new Set<string>(COLUMNS.map((c) => c.id));
+
+/**
+ * The column under the pointer wins. A card under the pointer refines the position within that column.
+ * (Plain closestCorners compares the corners of tall columns with those of small cards, so a drop in the
+ * upper part of Build could resolve to a card in Done.)
+ */
+const columnFirstCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  const candidates = hits.length ? hits : rectIntersection(args);
+  const column = candidates.find((h) => COLUMN_IDS.has(String(h.id)));
+  if (!column) return candidates.length ? candidates : closestCorners(args);
+  const cards = candidates.filter((h) => !COLUMN_IDS.has(String(h.id)));
+  return cards.length ? [...cards, column] : [column];
+};
 
 function buildColumns(features: Feature[]): ColumnsState {
   const cols: ColumnsState = { backlog: [], build: [], done: [] };
@@ -69,7 +88,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div className="flex min-h-0 w-full min-w-[280px] flex-1 flex-col rounded-xl bg-muted/50">
+    <div ref={setNodeRef} className={cn('flex min-h-0 w-full min-w-[280px] flex-1 flex-col rounded-xl bg-muted/50 transition-colors', isOver && 'bg-sky-500/10')}>
       <div className="flex items-center justify-between px-3 pb-2 pt-3">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-muted-foreground" />
@@ -83,7 +102,7 @@ function Column({
         )}
       </div>
       <p className="px-3 pb-2 text-[11px] text-muted-foreground">{stats ?? hint}</p>
-      <div ref={setNodeRef} className={cn('flex-1 space-y-2 overflow-y-auto px-2 pb-3 transition-colors', isOver && 'bg-sky-500/5')}>
+      <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-3">
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((fid) => features[fid] && <SortableFeatureCard key={fid} feature={features[fid]} onOpen={onOpen} />)}
         </SortableContext>
@@ -195,7 +214,7 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={columnFirstCollision}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
