@@ -16,6 +16,7 @@ import {
   FlaskConical,
   FolderGit2,
   GitPullRequest,
+  Play,
   LayoutDashboard,
   ListChecks,
   Workflow,
@@ -36,7 +37,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, SheetContent } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AgentStatusBadge, PipelineChip, PriorityBadge, RunProgress, isActive, newTokens, roleLabel, runDurationMs, runLabel } from './status';
+import { AgentStatusBadge, PipelineChip, isPaused, PriorityBadge, RunProgress, isActive, newTokens, roleLabel, runDurationMs, runLabel } from './status';
 import { DiffViewer } from './DiffViewer';
 import { GatePanel } from './GatePanel';
 import { PipelineTab } from './PipelineTab';
@@ -554,6 +555,11 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
             {(feature.agentStatus === 'failed' || feature.agentStatus === 'cancelled') && (
               <Button size="sm" variant="outline" onClick={() => act(() => api.retry(feature.id), 'Retrying the step')} title="Re-runs the step that failed (same role and instructions)">
                 <RotateCcw /> Retry {feature.run ? runLabel(feature.run).toLowerCase() : ''}
+              </Button>
+            )}
+            {isPaused(feature) && (
+              <Button size="sm" onClick={() => act(() => api.continuePipeline(feature.id), 'Pipeline continued')} title="The last step finished but the next one did not start">
+                <Play /> Continue pipeline
               </Button>
             )}
             {feature.gate && (

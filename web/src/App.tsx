@@ -29,7 +29,9 @@ export default function App() {
   const connected = useStore((s) => s.connected);
   const features = useStore((s) => s.features);
   const backendVersion = useStore((s) => s.settings?.apiVersion ?? null);
-  const outOfSync = backendVersion !== null ? backendVersion !== API_VERSION : useStore((s) => !!s.settings);
+  const settingsLoaded = useStore((s) => !!s.settings);
+  // Hooks must run unconditionally; an older backend has no apiVersion at all.
+  const outOfSync = settingsLoaded && backendVersion !== API_VERSION;
   const [projectId, setProjectId] = useState<string | null>(readLastProject());
   const [projectDialog, setProjectDialog] = useState<{ open: boolean; project: Project | null }>({ open: false, project: null });
   const [featureDialog, setFeatureDialog] = useState<{ open: boolean; feature: Feature | null }>({ open: false, feature: null });

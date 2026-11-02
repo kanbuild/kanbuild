@@ -82,8 +82,11 @@ export function apiBase(host = 'github.com'): string {
 export async function ghFetch<T>(method: string, apiPath: string, body?: unknown, token?: string, host?: string): Promise<T> {
   const t = token ?? getToken()?.token;
   if (!t) throw new GithubError(400, 'No GitHub token configured. Add one in Settings → GitHub.');
-  const res = await fetch(`${apiBase(host)}${apiPath}`, {
-    method,
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase(host)}${apiPath}`, {
+      method,
+      signal: AbortSignal.timeout(20000),
     headers: {
       Authorization: `Bearer ${t}`,
       Accept: 'application/vnd.github+json',
@@ -91,8 +94,12 @@ export async function ghFetch<T>(method: string, apiPath: string, body?: unknown
       'User-Agent': 'local-ai-orchestrator',
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err: any) {
+    const cause = err?.name === 'TimeoutError' ? 'timed out after 20s' : err?.cause?.code || err?.cause?.message || err?.message;
+    throw new GithubError(502, `Could not reach GitHub at ${apiBase(host)} (${cause}). Check your network, VPN or proxy.`);
+  }
   const text = await res.text();
   let data: any = null;
   try {

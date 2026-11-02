@@ -34,6 +34,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [github, setGithub] = useState<(GithubStatus & { error?: string }) | null>(null);
   const [token, setToken] = useState('');
   const [savingToken, setSavingToken] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
   const presets = settings?.editorPresets ?? [];
 
@@ -64,6 +65,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const saveToken = async (value: string) => {
     setSavingToken(true);
+    setTokenError(null);
     try {
       const s = await api.setGithubToken(value);
       setGithub(s);
@@ -71,6 +73,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       setSettings({ ...(settings as any), github: s });
       toast(value ? `GitHub connected as @${s.login}` : 'GitHub token removed');
     } catch (err) {
+      setTokenError(err instanceof Error ? err.message : String(err));
       toastError(err);
     } finally {
       setSavingToken(false);
@@ -202,9 +205,10 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             <div className="flex gap-2">
               <Input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="github_pat_… or ghp_…" className="font-mono text-xs" />
               <Button type="button" size="sm" variant="outline" onClick={() => saveToken(token)} disabled={!token.trim() || savingToken}>
-                {github?.configured ? 'Replace' : 'Save token'}
+                {savingToken ? 'Checking…' : github?.configured ? 'Replace' : 'Save token'}
               </Button>
             </div>
+            {tokenError && <p className="text-xs text-red-600">Not saved: {tokenError}</p>}
             <p className="text-[11px] text-muted-foreground">
               Fine-grained token with <strong>Contents: read &amp; write</strong> and <strong>Pull requests: read &amp; write</strong> on your repositories. It is validated, never shown again, never passed to agents, and only used to push feature branches and open pull requests. Nothing is ever merged.
             </p>
