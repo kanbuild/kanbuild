@@ -276,6 +276,21 @@ describe('agent pipeline', () => {
     expect(report.changes.commits.map((c: any) => c.subject)).toEqual(['feat: Checkout page']);
   }, 60000);
 
+  it('continues a paused pipeline whose next step was not started', async () => {
+    const project = m.projects.listProjects()[0];
+    await m.projects.updateProject(project.id, { pipeline: { plan: true, planApproval: true } });
+    const f = m.features.createFeature(project.id, { title: 'Paused plan' });
+    m.orch.orchestrator.startFeature(f.id);
+    await waitFor(() => feature(f.id).gate?.type === 'plan_approval');
+    expect(() => m.orch.orchestrator.continuePipeline(f.id)).toThrow(/checkpoint/);
+    // Simulate a lost checkpoint: completed planner run, no gate.
+    m.features.patchFeatureState(f.id, { gate: null });
+    expect(feature(f.id).agentStatus).toBe('completed');
+    m.orch.orchestrator.continuePipeline(f.id);
+    expect(feature(f.id).gate.type).toBe('plan_approval');
+    await m.orch.orchestrator.cancel(f.id);
+  }, 30000);
+
   it('keeps open checkpoints across a backend restart', async () => {
     const project = m.projects.listProjects()[0];
     await m.projects.updateProject(project.id, { pipeline: { plan: true, planApproval: true } });

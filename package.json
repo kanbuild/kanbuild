@@ -4,16 +4,22 @@
   "private": true,
   "description": "Local-first Kanban orchestrator that delegates features to Claude Code agents in isolated git worktrees",
   "type": "module",
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w web",
-    "start": "npm run start -w server",
+    "start": "npm run build -w web && npm run start -w server",
     "test": "npm run test -w server",
-    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "start:server": "npm run start -w server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
   },
-  "engines": { "node": ">=22.13" }
+  "engines": {
+    "node": ">=22.13"
+  }
 }

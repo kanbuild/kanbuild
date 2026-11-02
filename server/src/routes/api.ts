@@ -23,7 +23,7 @@ import { getSettings, updateSettings } from '../settings.ts';
 import { EDITOR_PRESETS, EditorError, launch, openTerminalCommand, resolveEditorCommand, revealCommand } from '../editor.ts';
 import { buildClaudeArgs, previewCommand, resolveLaunchConfig, resumeCommand } from '../launch.ts';
 import { buildPlanPrompt, buildPrompt, buildReviewerPrompt, buildTesterPrompt } from '../prompt.ts';
-import { ACTIVE_AGENT_STATUSES, CLAUDE_ROLES, type Feature, type FeatureStatus } from '../../../shared/types.ts';
+import { ACTIVE_AGENT_STATUSES, API_VERSION, CLAUDE_ROLES, type Feature, type FeatureStatus } from '../../../shared/types.ts';
 
 type Handler = (req: Request, res: Response) => unknown | Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -49,6 +49,7 @@ api.get('/settings', h(() => ({
   editorPresets: EDITOR_PRESETS.map((p) => ({ id: p.id, label: p.label })),
   platform: process.platform,
   github: githubStatus(),
+  apiVersion: API_VERSION,
 })));
 /** Store (validated) or clear the GitHub token. The token itself is never returned. */
 api.put('/settings/github', h(async (req) => {
@@ -182,6 +183,7 @@ api.post('/features/:id/gate', h((req) => {
   if (!['approve', 'reject', 'answer'].includes(action)) throw new HttpError(400, 'action must be approve, reject or answer');
   return orchestrator.resolveGate(req.params.id, action, { comment, answers });
 }));
+api.post('/features/:id/continue', h((req) => orchestrator.continuePipeline(req.params.id)));
 api.post('/features/:id/pr', h((req) => createPrForFeature(req.params.id)));
 api.get('/features/:id/diff', h(async (req) => {
   const f = getFeature(req.params.id);

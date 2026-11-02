@@ -4,7 +4,7 @@ import { Coins, GitBranch, GitPullRequest, Link2, Timer, Zap } from 'lucide-reac
 import type { Feature } from '@shared/types.ts';
 import { cn, formatCost, formatDuration, formatTokens } from '@/lib/utils';
 import { useNow } from '@/hooks';
-import { AgentStatusBadge, PipelineChip, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, runLabel, totalTokens } from './status';
+import { AgentStatusBadge, PipelineChip, isWaiting, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, runLabel, totalTokens } from './status';
 
 export function FeatureCardView({ feature, dragging, onClick }: { feature: Feature; dragging?: boolean; onClick?: () => void }) {
   const run = feature.run;
@@ -21,7 +21,7 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
         'group cursor-pointer rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow hover:shadow-md',
         dragging && 'rotate-1 shadow-lg ring-2 ring-sky-400/50',
         feature.agentStatus === 'failed' && 'border-red-300 dark:border-red-900',
-        feature.gate && 'border-amber-400 ring-2 ring-amber-400/30 dark:border-amber-600',
+        isWaiting(feature) && 'border-amber-400 ring-2 ring-amber-400/30 dark:border-amber-600',
         blocked && feature.status === 'backlog' && 'border-dashed',
       )}
     >
@@ -42,7 +42,7 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
         <div className="mt-2.5 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
-              {!feature.gate && <AgentStatusBadge status={feature.agentStatus} />}
+              {!isWaiting(feature) && <AgentStatusBadge status={feature.agentStatus} />}
               <PipelineChip feature={feature} />
             </div>
             {run && run.attempt > 1 && (

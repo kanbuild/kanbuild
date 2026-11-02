@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bot, FolderGit2, Plus, Settings, SlidersHorizontal, Trash2, Wifi, WifiOff } from 'lucide-react';
-import type { Feature, Project } from '@shared/types.ts';
+import { API_VERSION, type Feature, type Project } from '@shared/types.ts';
 import { api } from './api';
 import { getState, loadFeatures, onNotification, useStore } from './store';
 import { needsAttention } from './components/status';
@@ -28,6 +28,8 @@ export default function App() {
   const projects = useStore((s) => s.projects);
   const connected = useStore((s) => s.connected);
   const features = useStore((s) => s.features);
+  const backendVersion = useStore((s) => s.settings?.apiVersion ?? null);
+  const outOfSync = backendVersion !== null ? backendVersion !== API_VERSION : useStore((s) => !!s.settings);
   const [projectId, setProjectId] = useState<string | null>(readLastProject());
   const [projectDialog, setProjectDialog] = useState<{ open: boolean; project: Project | null }>({ open: false, project: null });
   const [featureDialog, setFeatureDialog] = useState<{ open: boolean; feature: Feature | null }>({ open: false, feature: null });
@@ -178,6 +180,11 @@ export default function App() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
+        {outOfSync && (
+          <div className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            The dashboard and the backend are different versions, so some controls may be missing. Stop the backend, run <code className="font-mono">npm start</code> (it rebuilds the dashboard), then reload this page.
+          </div>
+        )}
         {project ? (
           <>
             <header className="flex items-center justify-between gap-4 border-b px-5 py-3">

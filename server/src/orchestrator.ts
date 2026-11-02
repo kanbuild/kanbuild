@@ -616,8 +616,34 @@ export class Orchestrator {
     this.tick();
   }
 
-  /** Decide and apply the next pipeline step after a run finished. */
+  /** Decide and apply the next pipeline step after a run finished. Never throws: a failure is shown on the card. */
   advance(featureId: string, runId: string) {
+    try {
+      this.applyNextStep(featureId, runId);
+    } catch (err: any) {
+      console.error('[orchestrator] pipeline step failed', err);
+      addEvent(runId, 'error', `Could not start the next pipeline step: ${err.message}. Use "Continue pipeline" to try again.`);
+      const f = getFeatureSafe(featureId);
+      if (f) notify({ title: 'Pipeline paused', body: `${f.title}: ${err.message}`, level: 'error', featureId, projectId: f.projectId });
+    }
+  }
+
+  /**
+   * Re-run the pipeline decision for a feature whose last step finished but that is not waiting for
+   * anything (no checkpoint, no active run), e.g. after an error while starting the next step.
+   */
+  continuePipeline(featureId: string): Feature {
+    const feature = getFeature(featureId);
+    this.assertIdle(feature);
+    if (feature.gate) throw new HttpError(409, 'The pipeline is waiting at a checkpoint; use the checkpoint panel');
+    if (feature.status !== 'build' || feature.agentStatus !== 'completed' || !feature.currentRunId) {
+      throw new HttpError(409, 'There is no finished step to continue from');
+    }
+    this.advance(featureId, feature.currentRunId);
+    return getFeature(featureId);
+  }
+
+  private applyNextStep(featureId: string, runId: string) {
     const feature = getFeatureSafe(featureId);
     const run = getRun(runId);
     if (!feature || !run || feature.currentRunId !== runId) return;

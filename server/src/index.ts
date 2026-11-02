@@ -31,6 +31,25 @@ function isLocalOrigin(origin: string | undefined): boolean {
   }
 }
 
+/** Warn when web/src is newer than the built dashboard (e.g. after git pull without `npm run build`). */
+function warnIfDashboardStale() {
+  const src = path.resolve(here, '../../web/src');
+  const shared = path.resolve(here, '../../shared');
+  try {
+    const built = fs.statSync(path.join(WEB_DIST, 'index.html')).mtimeMs;
+    const newest = (dir: string): number =>
+      fs.readdirSync(dir, { withFileTypes: true }).reduce((m, e) => {
+        const p = path.join(dir, e.name);
+        return Math.max(m, e.isDirectory() ? newest(p) : fs.statSync(p).mtimeMs);
+      }, 0);
+    if (Math.max(newest(src), newest(shared)) > built) {
+      console.warn('[orchestrator] WARNING: the dashboard build (web/dist) is older than its sources. Run `npm run build` (or `npm start`, which builds first).');
+    }
+  } catch {
+    /* sources not present (packaged install) */
+  }
+}
+
 getDb();
 const app = express();
 app.disable('x-powered-by');
@@ -46,8 +65,13 @@ app.use(express.json({ limit: '2mb' }));
 app.use('/api', api);
 
 if (fs.existsSync(WEB_DIST)) {
-  app.use(express.static(WEB_DIST));
-  app.get(/^(?!\/api|\/ws).*/, (_req, res) => res.sendFile(path.join(WEB_DIST, 'index.html')));
+  warnIfDashboardStale();
+  // index.html must never be cached, or an old dashboard keeps loading after an update. Hashed assets can be.
+  app.use(express.static(WEB_DIST, { index: false, setHeaders: (res, file) => file.endsWith('.html') && res.setHeader('Cache-Control', 'no-cache') }));
+  app.get(/^(?!\/api|\/ws).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(WEB_DIST, 'index.html'));
+  });
 } else {
   app.get('/', (_req, res) =>
     res.type('text').send('Frontend not built. Run `npm run build` or use `npm run dev` (Vite on http://localhost:5173).'),

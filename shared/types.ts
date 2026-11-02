@@ -1,5 +1,11 @@
 // Types shared between the backend and the frontend.
 
+/**
+ * Bumped whenever the backend and the dashboard must be updated together. The dashboard shows a
+ * "rebuild/reload" banner when its compiled value differs from the backend's.
+ */
+export const API_VERSION = 5;
+
 export type Priority = 'low' | 'medium' | 'high';
 export type FeatureStatus = 'backlog' | 'build' | 'done';
 export type AgentStatus =

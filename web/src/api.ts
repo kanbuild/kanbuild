@@ -38,6 +38,7 @@ export type SettingsResponse = Settings & {
   editorPresets: { id: string; label: string }[];
   platform: string;
   github: GithubStatus;
+  apiVersion?: number;
 };
 
 export interface SessionInfo {
@@ -111,6 +112,7 @@ export const api = {
 
   setDependencies: (id: string, dependsOn: string[]) => req<Feature>('PUT', `/features/${id}/dependencies`, { dependsOn }),
   gate: (id: string, action: GateAction, body: { comment?: string; answers?: string[] } = {}) => req<Feature>('POST', `/features/${id}/gate`, { action, ...body }),
+  continuePipeline: (id: string) => req<Feature>('POST', `/features/${id}/continue`, {}),
   createPr: (id: string) => req<Feature>('POST', `/features/${id}/pr`, {}),
   diff: (id: string, scope = 'all', file?: string) =>
     req<DiffResult>('GET', `/features/${id}/diff?scope=${encodeURIComponent(scope)}${file ? `&file=${encodeURIComponent(file)}` : ''}`),

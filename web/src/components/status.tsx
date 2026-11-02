@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, ClipboardCheck, Clock, Link2, Loader2, MessageCircleQuestion, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, PauseCircle, CheckCircle2, CircleDashed, ClipboardCheck, Clock, Link2, Loader2, MessageCircleQuestion, ShieldCheck, XCircle } from 'lucide-react';
 import type { AgentRole, AgentStatus, Feature, GateType, Priority, Run } from '@shared/types.ts';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
@@ -36,9 +36,16 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
   return <Badge variant={v}>{priority}</Badge>;
 }
 
+/** A step finished in Build but nothing is waiting or running: the pipeline needs "Continue". */
+export const isPaused = (f: Feature) => f.status === 'build' && f.agentStatus === 'completed' && !f.gate;
+
+/** Waiting for the user (checkpoint) or paused: the feature is not finished even though its last step completed. */
+export const isWaiting = (f: Feature) => !!f.gate || isPaused(f);
+
 export function RunProgress({ feature, run, className }: { feature: Feature; run: Run | null | undefined; className?: string }) {
   const status = run?.status ?? feature.agentStatus;
   if (!status) return null;
+  if (isWaiting(feature) && (!run || run.id === feature.currentRunId)) return <Progress value={100} tone="amber" className={className} />;
   if (status === 'completed') return <Progress value={100} tone="green" className={className} />;
   if (status === 'failed') return <Progress value={run?.progress ?? 100} tone="red" className={className} />;
   if (status === 'cancelled') return <Progress value={run?.progress ?? 0} className={className} />;
@@ -110,6 +117,13 @@ export function PipelineChip({ feature }: { feature: Feature }) {
       </Badge>
     );
   }
+  if (isPaused(feature)) {
+    return (
+      <Badge variant="amber" title="The last step finished but the next one did not start. Open the card and click Continue pipeline.">
+        <PauseCircle className="h-3 w-3" /> Paused
+      </Badge>
+    );
+  }
   const run = feature.run;
   if (feature.status === 'build' && feature.agentStatus === 'queued' && feature.blockedBy.length && !feature.worktreePath) {
     return (
@@ -125,5 +139,5 @@ export function PipelineChip({ feature }: { feature: Feature }) {
 }
 
 export function needsAttention(f: Feature) {
-  return !!f.gate || (f.status === 'build' && f.agentStatus === 'failed');
+  return isWaiting(f) || (f.status === 'build' && f.agentStatus === 'failed');
 }
