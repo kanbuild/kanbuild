@@ -10,6 +10,11 @@ export type AgentStatus =
   | 'failed'
   | 'cancelled';
 
+/** 'lean' trims tools/skills/MCP/user config for lower token use; 'full' = same as an interactive session. */
+export type AgentProfile = 'lean' | 'full';
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type RunKind = 'feature' | 'followup';
+
 export const ACTIVE_AGENT_STATUSES: AgentStatus[] = ['queued', 'initialising', 'running'];
 
 export interface Project {
@@ -23,6 +28,11 @@ export interface Project {
   allowedTools: string[];
   /** Optional model override (e.g. "sonnet", "opus"). Empty = Claude Code default. */
   model: string;
+  /** Overrides; empty string = inherit global setting. */
+  agentProfile: AgentProfile | '';
+  effort: Effort | '';
+  /** Optional MCP config (JSON string or file path) passed via --mcp-config. */
+  mcpConfig: string;
   createdAt: string;
 }
 
@@ -64,10 +74,25 @@ export type ProgressStage =
   | 'reporting'
   | 'done';
 
+export interface RunMetrics {
+  /** Number of API turns (unique assistant messages). */
+  turns: number;
+  /** Context size of the first turn: system prompt + tools + prompt, before any work. */
+  baselineContextTokens: number;
+  /** Largest context size of any single turn. */
+  peakContextTokens: number;
+  /** Tool calls denied by permissions (each one usually costs an extra turn). */
+  permissionDenials: number;
+}
+
 export interface Run {
   id: string;
   featureId: string;
   attempt: number;
+  kind: RunKind;
+  /** Follow-up instruction for kind 'followup'. */
+  message: string | null;
+  metrics: RunMetrics;
   status: AgentStatus;
   pid: number | null;
   startedAt: string | null;
@@ -152,6 +177,7 @@ export interface AgentSelfReport {
   tests: TestResults;
   build: BuildResult;
   outstandingIssues: string[];
+  docsUpdated: string[];
   reported: boolean;
 }
 
@@ -167,11 +193,18 @@ export interface Report {
   reportedCostUsd: number | null;
   durationMs: number | null;
   model: string | null;
+  metrics?: RunMetrics;
+  kind?: RunKind;
   markdown: string;
 }
 
 export interface Settings {
   concurrency: number;
+  agentProfile: AgentProfile;
+  /** '' = Claude Code default. */
+  effort: Effort | '';
+  /** Hard spending cap per run (claude --max-budget-usd); 0 = none. */
+  maxBudgetUsd: number;
   defaultModel: string;
   editorCommand: string;
   claudeBinary: string;

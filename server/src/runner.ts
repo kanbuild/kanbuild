@@ -10,6 +10,24 @@ export interface LaunchSpec {
   args: string[];
 }
 
+/** Environment variables that tie a process to a running Claude Code session. */
+export const INHERITED_SESSION_VARS = [
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_REMOTE_SESSION_ID',
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_SESSION_ATTENDED',
+  'CLAUDE_PID',
+  'CLAUDE_CODE_MESSAGING_SOCKET',
+  'CLAUDE_CODE_MESSAGING_TOKEN',
+  'CLAUDE_CODE_TEE_SDK_STDOUT',
+  'CLAUDE_CODE_INCLUDE_PARTIAL_MESSAGES',
+  'CLAUDE_CODE_DIAGNOSTICS_FILE',
+  'CLAUDE_AFTER_LAST_COMPACT',
+  'CLAUDE_EFFORT',
+];
+
 export const STDOUT_FILE = 'stdout.ndjson';
 export const STDERR_FILE = 'stderr.log';
 export const EXIT_FILE = 'exit_code';
@@ -25,9 +43,9 @@ export function launchDetached(spec: LaunchSpec): number {
   const err = fs.openSync(path.join(spec.logDir, STDERR_FILE), 'a');
   const exitFile = path.join(spec.logDir, EXIT_FILE);
   const env: NodeJS.ProcessEnv = { ...process.env, ORCH_EXIT_FILE: exitFile };
-  // Avoid the child believing it is nested inside another Claude Code session.
-  delete env.CLAUDECODE;
-  delete env.CLAUDE_CODE_ENTRYPOINT;
+  // If the orchestrator itself was started from inside a Claude Code session, don't let agents inherit
+  // that session's identity (they would all report and resume the parent's session id).
+  for (const k of INHERITED_SESSION_VARS) delete env[k];
   const child = spawn(
     '/bin/sh',
     ['-c', '"$0" "$@" < /dev/null; code=$?; echo "$code" > "$ORCH_EXIT_FILE.tmp" && mv "$ORCH_EXIT_FILE.tmp" "$ORCH_EXIT_FILE"', spec.binary, ...spec.args],

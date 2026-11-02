@@ -64,6 +64,45 @@ When a card enters Build, the orchestrator:
 5. On exit, collects the git changes (commits, created/modified/deleted files, uncommitted work) and parses the agent's JSON self-report. It then builds the markdown implementation report.
 6. Sets the run to **Completed** (the card moves to Done), **Failed** (the card stays in Build with **Retry**) or **Cancelled**.
 
+### Agent profiles and token use
+
+Every API turn re-sends the agent's whole context, so the token count grows with *turns × context size*. Most of it is **cache re-reads**, which are billed at roughly 5–10% of the input price. The dashboard keeps these apart:
+
+- **New tokens:** input + cache write + output.
+- **Cache re-reads**, shown separately.
+- **Turns**, and the **context per turn** at the start and at its peak.
+- **Denied tool calls**: each one usually costs an extra turn.
+
+Agents run the normal Claude Code harness in headless mode (`claude -p`). The profile decides how much of your configuration they load:
+
+| Profile | What the agent gets | Context per turn at start (measured) |
+|---|---|---|
+| **lean** (default) | `--tools Read,Edit,Write,Glob,Grep,Bash`, `--disable-slash-commands`, `--strict-mcp-config` (no user MCP servers), and `--setting-sources project,local`. The repository's CLAUDE.md and `.claude/settings.json` still load; `~/.claude` plugins, hooks and global CLAUDE.md do not. | ~7.7k tokens |
+| **full** | Exactly what an interactive session gets: all built-in tools, skills, plugins, MCP servers, hooks and the global CLAUDE.md. | ~35k tokens |
+
+**Settings** also has effort (`--effort`, default `medium`) and a per-run hard budget (`--max-budget-usd`). Projects can override the profile and effort, and pass their own MCP servers with `--mcp-config`. Project settings show the exact command line agents will run.
+
+The prompt defers to the repository's own documentation workflow. CLAUDE.md decides which docs, such as `agent-docs/`, the agent reads and keeps up to date. The prompt asks the agent to read only the relevant docs, prefer them over exploring the code, and report `docs_updated`. It also lists the allowed shell commands, so the agent doesn't waste turns on commands that will be denied.
+
+### Continuing a session
+
+Each run records its Claude Code session ID. From a card's **Overview** tab you can continue in two ways:
+
+- **Send follow-up** runs `claude -p "<message>" --resume <sessionId>` in the same worktree, in the background. You get the same live monitoring, a new report, and "Follow-up #n" in the run history.
+- **Continue in terminal** gives you `cd <worktree> && claude --resume <sessionId>` to copy. On macOS, **Open in Terminal** opens Terminal.app with that command. Sessions must be resumed from the worktree directory.
+
+When the orchestrator itself is started from inside a Claude Code session, the agents would inherit that session's ID. The orchestrator strips those session variables, so every agent gets its own session.
+
+### Open in editor
+
+Pick an editor preset in Settings: VS Code (default), Cursor, Zed, WebStorm, IntelliJ, Finder, or a custom command. The orchestrator looks for the editor's CLI in these places, in order:
+
+1. Your `PATH`.
+2. `/usr/local/bin`, `/opt/homebrew/bin`, and the CLI inside the app bundle.
+3. On macOS, it falls back to `open -a "<App>"`.
+
+So VS Code opens even if the `code` shell command isn't installed.
+
 ### Background execution and recovery
 
 Agents run as **detached** process groups. Their stdout and stderr go straight to files under `~/.local-orchestrator/runs/<runId>/`, and a small shell wrapper records the exit code. This means:
@@ -118,7 +157,7 @@ Both are **estimates, not actual charges**. Claude subscription plans (Pro/Max/T
 | `ORCH_DATA_DIR` | `~/.local-orchestrator` | SQLite DB and run logs |
 | `ORCH_CLAUDE_BIN` | `claude` | Claude Code binary (overrides the Settings value) |
 
-Under **Settings**, the app also lets you set the concurrency limit, the default model, the editor command (`code`, `cursor`, `zed`, …) and the Claude binary. **Project settings** cover the base branch, the worktree directory, a model override and the allowed tools.
+Under **Settings**, the app also lets you set the agent profile, effort, a budget per run, the concurrency limit, the default model, the editor and the Claude binary. **Project settings** cover the base branch, the worktree directory, a model override and the allowed tools.
 
 ## Testing
 
@@ -148,7 +187,10 @@ ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start
 - `GET/POST /api/projects/:id/features`
 - `POST /api/projects/:id/reorder`
 - `GET/PATCH/DELETE /api/features/:id`. A `PATCH` with `status: "build"` starts an agent.
-- `POST /api/features/:id/{cancel,retry,open}`
+- `POST /api/features/:id/{cancel,retry,open,reveal,open-terminal}`
+- `POST /api/features/:id/followup` (`{ message }`)
+- `GET /api/features/:id/session`
+- `GET /api/projects/:id/launch-preview`
 - `GET /api/features/:id/{runs,changes}`
 - `DELETE /api/features/:id/worktree[?force=true]`
 - `GET /api/runs/:id/{events,report}`

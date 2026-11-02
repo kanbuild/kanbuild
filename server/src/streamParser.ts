@@ -1,4 +1,4 @@
-import type { ProgressStage, RunEventKind, Usage } from '../../shared/types.ts';
+import type { ProgressStage, RunEventKind, RunMetrics, Usage } from '../../shared/types.ts';
 
 export interface ParsedEvent {
   kind: RunEventKind;
@@ -105,6 +105,19 @@ export class StreamParser {
   private usageByMessage = new Map<string, Usage>();
   private finalUsage: Usage | null = null;
   private toolNames = new Map<string, { name: string; summary: string }>();
+  /** Context size (input + cache write + cache read) per API message, in arrival order. */
+  private contextByMessage = new Map<string, number>();
+  permissionDenials = 0;
+
+  get metrics(): RunMetrics {
+    const sizes = [...this.contextByMessage.values()];
+    return {
+      turns: sizes.length,
+      baselineContextTokens: sizes[0] ?? 0,
+      peakContextTokens: sizes.length ? Math.max(...sizes) : 0,
+      permissionDenials: this.permissionDenials,
+    };
+  }
   private buffer = '';
 
   get usage(): Usage {
@@ -200,6 +213,10 @@ export class StreamParser {
         cacheReadTokens: m.usage.cache_read_input_tokens ?? 0,
         cacheCreation1hTokens: m.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
       });
+      this.contextByMessage.set(
+        key,
+        (m.usage.input_tokens ?? 0) + (m.usage.cache_creation_input_tokens ?? 0) + (m.usage.cache_read_input_tokens ?? 0),
+      );
     }
     const out: ParsedEvent[] = [];
     for (const block of m.content ?? []) {
@@ -249,7 +266,8 @@ export class StreamParser {
       const tool = this.toolNames.get(block.tool_use_id);
       const text = toolResultText(block.content);
       const isError = !!block.is_error;
-      const permissionDenied = /permission|not allowed|denied/i.test(text) && isError;
+      const permissionDenied = /permission|not allowed|denied|requires approval/i.test(text) && isError;
+      if (permissionDenied) this.permissionDenials++;
       out.push({
         kind: isError ? (permissionDenied ? 'warning' : 'error') : 'tool_result',
         summary: `${isError ? (permissionDenied ? 'Permission denied' : 'Tool error') : 'Result'}${tool ? ` (${tool.name})` : ''}: ${truncate(text || '(empty)', 200)}`,
@@ -292,6 +310,8 @@ export class StreamParser {
         cacheCreation1hTokens: msg.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
       };
     }
+    // Claude Code lists every denied tool call in the result; prefer it over our heuristic count.
+    if (Array.isArray(msg.permission_denials)) this.permissionDenials = msg.permission_denials.length;
     this.result = {
       isError: !!msg.is_error || (msg.subtype && msg.subtype !== 'success'),
       subtype: msg.subtype ?? 'unknown',

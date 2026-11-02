@@ -1,6 +1,6 @@
 import { getDb, newId, now } from './db.ts';
 import { bus } from './events.ts';
-import type { AgentStatus, ProgressStage, Report, Run, RunEvent, RunEventKind, Usage } from '../../shared/types.ts';
+import type { AgentStatus, ProgressStage, Report, Run, RunEvent, RunEventKind, RunKind, RunMetrics, Usage } from '../../shared/types.ts';
 
 export interface RunRow extends Run {
   logDir: string | null;
@@ -12,6 +12,14 @@ export function rowToRun(r: any): RunRow {
     id: r.id,
     featureId: r.feature_id,
     attempt: r.attempt,
+    kind: r.kind ?? 'feature',
+    message: r.message ?? null,
+    metrics: {
+      turns: r.turns ?? 0,
+      baselineContextTokens: r.baseline_context_tokens ?? 0,
+      peakContextTokens: r.peak_context_tokens ?? 0,
+      permissionDenials: r.permission_denials ?? 0,
+    },
     status: r.status,
     pid: r.pid,
     startedAt: r.started_at,
@@ -60,14 +68,14 @@ export function listRunsByStatus(statuses: AgentStatus[]): RunRow[] {
   return (getDb().prepare(q).all(...statuses) as any[]).map(rowToRun);
 }
 
-export function createRun(featureId: string): RunRow {
+export function createRun(featureId: string, kind: RunKind = 'feature', message: string | null = null): RunRow {
   const d = getDb();
   const prev = d.prepare('SELECT MAX(attempt) AS a FROM runs WHERE feature_id = ?').get(featureId) as { a: number | null };
   const id = newId('run');
   d.prepare(
-    `INSERT INTO runs (id, feature_id, attempt, status, stage, current_activity, created_at)
-     VALUES (?, ?, ?, 'queued', 'queued', 'Waiting for an execution slot', ?)`,
-  ).run(id, featureId, (prev.a ?? 0) + 1, now());
+    `INSERT INTO runs (id, feature_id, attempt, kind, message, status, stage, current_activity, created_at)
+     VALUES (?, ?, ?, ?, ?, 'queued', 'queued', 'Waiting for an execution slot', ?)`,
+  ).run(id, featureId, (prev.a ?? 0) + 1, kind, message, now());
   const run = getRun(id)!;
   bus.publish({ type: 'run.updated', run: publicRun(run) });
   return run;
@@ -86,6 +94,7 @@ export interface RunPatch {
   stage?: ProgressStage | null;
   currentActivity?: string | null;
   usage?: Usage;
+  metrics?: RunMetrics;
   model?: string | null;
   reportedCostUsd?: number | null;
   estimatedCostUsd?: number | null;
@@ -122,6 +131,10 @@ export function updateRun(id: string, patch: RunPatch, opts: { silent?: boolean 
       const u = v as Usage;
       sets.push('input_tokens=?', 'output_tokens=?', 'cache_creation_tokens=?', 'cache_read_tokens=?', 'cache_creation_1h_tokens=?');
       vals.push(u.inputTokens, u.outputTokens, u.cacheCreationTokens, u.cacheReadTokens, u.cacheCreation1hTokens ?? 0);
+    } else if (k === 'metrics') {
+      const m = v as RunMetrics;
+      sets.push('turns=?', 'baseline_context_tokens=?', 'peak_context_tokens=?', 'permission_denials=?');
+      vals.push(m.turns, m.baselineContextTokens, m.peakContextTokens, m.permissionDenials);
     } else if (k === 'report') {
       sets.push('report_json=?');
       vals.push(JSON.stringify(v));

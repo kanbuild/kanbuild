@@ -9,8 +9,13 @@ const fail = process.env.FAKE_CLAUDE_FAIL === '1';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const args = process.argv.slice(2);
 const prompt = args[args.indexOf('-p') + 1] ?? '';
-const title = (prompt.match(/\*\*Title:\*\* (.*)/) ?? [])[1] ?? 'feature';
-const session = 'sess-' + Math.random().toString(36).slice(2, 10);
+const title = (prompt.match(/\*\*Title:\*\* (.*)/) ?? [])[1] ?? (prompt.startsWith('Follow-up') ? `followup ${Date.now()}` : 'feature');
+const resumed = args.includes('--resume') ? args[args.indexOf('--resume') + 1] : null;
+const session = resumed ?? 'sess-' + Math.random().toString(36).slice(2, 10);
+if (process.env.FAKE_CLAUDE_ARGS_DIR) {
+  fs.mkdirSync(process.env.FAKE_CLAUDE_ARGS_DIR, { recursive: true });
+  fs.writeFileSync(`${process.env.FAKE_CLAUDE_ARGS_DIR}/${session}-${Date.now()}.json`, JSON.stringify({ args, cwd: process.cwd() }));
+}
 const model = args.includes('--model') ? args[args.indexOf('--model') + 1] : 'claude-sonnet-5-5';
 const emit = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 let n = 0;
@@ -42,6 +47,7 @@ const report = {
   tests: { executed: ['npm test'], passed: 3, failed: 0, not_run: [], output: '3 passing' },
   build: { status: 'passed', output: '' },
   outstanding_issues: [],
+  docs_updated: ['agent-docs/features.md'],
 };
 const text = `Done.\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\``;
 assistant([{ type: 'text', text }]);

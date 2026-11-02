@@ -8,12 +8,8 @@ export const DEFAULT_ALLOWED_TOOLS = [
   'Read',
   'Edit',
   'Write',
-  'MultiEdit',
   'Glob',
   'Grep',
-  'LS',
-  'TodoWrite',
-  'NotebookEdit',
   'Bash(git status:*)',
   'Bash(git diff:*)',
   'Bash(git log:*)',
@@ -27,6 +23,12 @@ export const DEFAULT_ALLOWED_TOOLS = [
   'Bash(node:*)',
   'Bash(ls:*)',
   'Bash(cat:*)',
+  'Bash(head:*)',
+  'Bash(tail:*)',
+  'Bash(wc:*)',
+  'Bash(grep:*)',
+  'Bash(git branch:*)',
+  'Bash(git rev-parse:*)',
   'Bash(mkdir:*)',
 ];
 
@@ -46,6 +48,9 @@ function rowToProject(r: any): Project {
     worktreeRoot: r.worktree_root,
     allowedTools: JSON.parse(r.allowed_tools),
     model: r.model,
+    agentProfile: r.agent_profile ?? '',
+    effort: r.effort ?? '',
+    mcpConfig: r.mcp_config ?? '',
     createdAt: r.created_at,
   };
 }
@@ -68,6 +73,18 @@ export interface ProjectInput {
   worktreeRoot?: string;
   allowedTools?: string[];
   model?: string;
+  agentProfile?: string;
+  effort?: string;
+  mcpConfig?: string;
+}
+
+function cleanProfile(v: string | undefined, fallback: Project['agentProfile']): Project['agentProfile'] {
+  if (v === undefined) return fallback;
+  return v === 'lean' || v === 'full' ? v : '';
+}
+function cleanEffort(v: string | undefined, fallback: Project['effort']): Project['effort'] {
+  if (v === undefined) return fallback;
+  return (['low', 'medium', 'high', 'xhigh', 'max'] as const).includes(v as any) ? (v as Project['effort']) : '';
 }
 
 export async function createProject(input: ProjectInput): Promise<Project> {
@@ -88,14 +105,30 @@ export async function createProject(input: ProjectInput): Promise<Project> {
     worktreeRoot: input.worktreeRoot?.trim() ? path.resolve(expandHome(input.worktreeRoot.trim())) : v.suggestedWorktreeRoot,
     allowedTools: input.allowedTools?.length ? input.allowedTools : DEFAULT_ALLOWED_TOOLS,
     model: input.model ?? '',
+    agentProfile: cleanProfile(input.agentProfile, ''),
+    effort: cleanEffort(input.effort, ''),
+    mcpConfig: input.mcpConfig ?? '',
     createdAt: now(),
   };
   getDb()
     .prepare(
-      `INSERT INTO projects (id, name, description, path, base_branch, worktree_root, allowed_tools, model, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projects (id, name, description, path, base_branch, worktree_root, allowed_tools, model, agent_profile, effort, mcp_config, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(project.id, project.name, project.description, project.path, project.baseBranch, project.worktreeRoot, JSON.stringify(project.allowedTools), project.model, project.createdAt);
+    .run(
+      project.id,
+      project.name,
+      project.description,
+      project.path,
+      project.baseBranch,
+      project.worktreeRoot,
+      JSON.stringify(project.allowedTools),
+      project.model,
+      project.agentProfile,
+      project.effort,
+      project.mcpConfig,
+      project.createdAt,
+    );
   bus.publish({ type: 'project.updated', project });
   return project;
 }
@@ -117,10 +150,26 @@ export async function updateProject(id: string, input: ProjectInput): Promise<Pr
     worktreeRoot: input.worktreeRoot?.trim() ? path.resolve(expandHome(input.worktreeRoot.trim())) : p.worktreeRoot,
     allowedTools: input.allowedTools ? input.allowedTools.map((t) => t.trim()).filter(Boolean) : p.allowedTools,
     model: input.model ?? p.model,
+    agentProfile: cleanProfile(input.agentProfile, p.agentProfile),
+    effort: cleanEffort(input.effort, p.effort),
+    mcpConfig: input.mcpConfig ?? p.mcpConfig,
   };
   getDb()
-    .prepare('UPDATE projects SET name=?, description=?, base_branch=?, worktree_root=?, allowed_tools=?, model=? WHERE id=?')
-    .run(next.name, next.description, next.baseBranch, next.worktreeRoot, JSON.stringify(next.allowedTools), next.model, id);
+    .prepare(
+      'UPDATE projects SET name=?, description=?, base_branch=?, worktree_root=?, allowed_tools=?, model=?, agent_profile=?, effort=?, mcp_config=? WHERE id=?',
+    )
+    .run(
+      next.name,
+      next.description,
+      next.baseBranch,
+      next.worktreeRoot,
+      JSON.stringify(next.allowedTools),
+      next.model,
+      next.agentProfile,
+      next.effort,
+      next.mcpConfig,
+      id,
+    );
   bus.publish({ type: 'project.updated', project: next });
   return next;
 }

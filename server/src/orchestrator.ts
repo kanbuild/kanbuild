@@ -5,12 +5,13 @@ import { getFeature, moveFeature, patchFeatureState, publishFeature } from './fe
 import { allocateBranchAndPath, collectChanges, createWorktree, headCommit } from './git.ts';
 import { estimateCost, estimateCostByModel } from './pricing.ts';
 import { HttpError, getProject } from './projects.ts';
-import { buildPrompt } from './prompt.ts';
+import { buildFollowupPrompt, buildPrompt } from './prompt.ts';
+import { buildClaudeArgs, previewCommand, resolveLaunchConfig } from './launch.ts';
 import { buildReport, extractSelfReport } from './report.ts';
 import { LogTail, isAlive, killGroup, launchDetached, readExitCode, readStderrTail } from './runner.ts';
 import { addEvent, createRun, getRun, listRunsByStatus, updateRun, type RunRow } from './runs.ts';
 import { getSettings } from './settings.ts';
-import { ACTIVE_AGENT_STATUSES, type AgentStatus, type Feature } from '../../shared/types.ts';
+import { ACTIVE_AGENT_STATUSES, type AgentStatus, type Feature, type RunKind } from '../../shared/types.ts';
 
 const CANCEL_MARK = 'Cancellation requested';
 
@@ -34,13 +35,13 @@ export class Orchestrator {
   private ticking = false;
 
   /** Start (or restart) development of a feature: create a run and enqueue it. */
-  enqueue(featureId: string): Feature {
+  enqueue(featureId: string, kind: RunKind = 'feature', message: string | null = null): Feature {
     const feature = getFeature(featureId);
     if (feature.agentStatus && ACTIVE_AGENT_STATUSES.includes(feature.agentStatus)) {
       throw new HttpError(409, 'An agent is already assigned to this feature');
     }
-    const run = createRun(featureId);
-    addEvent(run.id, 'lifecycle', `Run #${run.attempt} queued`);
+    const run = createRun(featureId, kind, message);
+    addEvent(run.id, 'lifecycle', kind === 'followup' ? `Follow-up (run #${run.attempt}) queued: ${message}` : `Run #${run.attempt} queued`);
     patchFeatureState(featureId, { status: 'build', agentStatus: 'queued', currentRunId: run.id });
     if (feature.status !== 'build') moveFeature(featureId, 'build');
     setImmediate(() => this.tick());
@@ -49,6 +50,18 @@ export class Orchestrator {
 
   retry(featureId: string): Feature {
     return this.enqueue(featureId);
+  }
+
+  /** Continue the feature's existing Claude Code session (`--resume`) with a new instruction. */
+  followUp(featureId: string, message: string): Feature {
+    const text = message.trim();
+    if (!text) throw new HttpError(400, 'A follow-up message is required');
+    const feature = getFeature(featureId);
+    if (!feature.sessionId) throw new HttpError(409, 'This feature has no Claude Code session to continue yet');
+    if (!feature.worktreePath || !fs.existsSync(feature.worktreePath)) {
+      throw new HttpError(409, 'The worktree no longer exists, so the session cannot be resumed there');
+    }
+    return this.enqueue(featureId, 'followup', text);
   }
 
   async cancel(featureId: string): Promise<Feature> {
@@ -131,6 +144,10 @@ export class Orchestrator {
       // 1-3. Branch + isolated worktree (reused on retry if it still exists).
       let branch = feature.branch;
       let worktreePath = feature.worktreePath;
+      const followup = run.kind === 'followup';
+      if (followup && (!branch || !worktreePath || !fs.existsSync(worktreePath) || !feature.sessionId)) {
+        throw new Error('Cannot resume: the worktree or Claude Code session is missing');
+      }
       if (!branch || !worktreePath || !fs.existsSync(worktreePath)) {
         if (branch && worktreePath && !fs.existsSync(worktreePath)) {
           addEvent(runId, 'warning', `Previous worktree ${worktreePath} no longer exists; creating a new one`);
@@ -149,21 +166,14 @@ export class Orchestrator {
 
       // 4-6. Launch Claude Code inside the worktree.
       const logDir = path.join(RUNS_DIR, runId);
-      const prompt = buildPrompt(feature, project, branch, run.attempt);
+      const cfg = resolveLaunchConfig(project, settings);
+      const prompt = followup ? buildFollowupPrompt(run.message ?? '', branch) : buildPrompt(feature, project, branch, run.attempt, cfg);
+      const args = buildClaudeArgs(prompt, cfg, { resumeSessionId: followup ? feature.sessionId : null });
+      const model = cfg.model;
       fs.mkdirSync(logDir, { recursive: true });
       fs.writeFileSync(path.join(logDir, 'prompt.md'), prompt);
-      const model = project.model || settings.defaultModel;
-      const args = [
-        '-p',
-        prompt,
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--permission-mode',
-        'acceptEdits',
-      ];
-      if (project.allowedTools.length) args.push('--allowedTools', project.allowedTools.join(','));
-      if (model) args.push('--model', model);
+      fs.writeFileSync(path.join(logDir, 'command.txt'), previewCommand(settings.claudeBinary, args) + '\n');
+      addEvent(runId, 'system', `Launch profile: ${cfg.profile}${cfg.effort ? `, effort ${cfg.effort}` : ''}${cfg.maxBudgetUsd ? `, budget $${cfg.maxBudgetUsd}` : ''}${followup ? `, resuming session ${feature.sessionId}` : ''}`, previewCommand(settings.claudeBinary, args));
 
       const pid = launchDetached({ logDir, cwd: worktreePath, binary: settings.claudeBinary, args });
       updateRun(runId, {
@@ -232,6 +242,7 @@ export class Orchestrator {
         stage: p.stage ?? undefined,
         currentActivity: p.currentActivity ?? undefined,
         usage,
+        metrics: p.metrics,
         model: model ?? undefined,
         sessionId: p.sessionId ?? undefined,
         estimatedCostUsd: estimateCost(usage, model),
@@ -302,6 +313,9 @@ export class Orchestrator {
           durationMs,
           model,
           error,
+          metrics: parser.metrics,
+          kind: run.kind,
+          message: run.message,
         });
         if (report.self.tests.failed && report.self.tests.failed > 0) {
           addEvent(run.id, 'warning', `Agent reported ${report.self.tests.failed} failing test(s)`);
@@ -320,6 +334,7 @@ export class Orchestrator {
       stage: status === 'completed' ? 'done' : parser.stage,
       currentActivity: status === 'completed' ? 'Completed' : status === 'cancelled' ? 'Cancelled' : 'Failed',
       usage,
+      metrics: parser.metrics,
       model,
       sessionId: parser.sessionId,
       reportedCostUsd: result?.totalCostUsd ?? null,

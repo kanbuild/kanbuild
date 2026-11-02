@@ -88,6 +88,17 @@ const MIGRATIONS: string[] = [
   );
   `,
   `ALTER TABLE runs ADD COLUMN cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0;`,
+  `
+  ALTER TABLE projects ADD COLUMN agent_profile TEXT NOT NULL DEFAULT '';
+  ALTER TABLE projects ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+  ALTER TABLE projects ADD COLUMN mcp_config TEXT NOT NULL DEFAULT '';
+  ALTER TABLE runs ADD COLUMN kind TEXT NOT NULL DEFAULT 'feature';
+  ALTER TABLE runs ADD COLUMN message TEXT;
+  ALTER TABLE runs ADD COLUMN turns INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE runs ADD COLUMN baseline_context_tokens INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE runs ADD COLUMN peak_context_tokens INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE runs ADD COLUMN permission_denials INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function getDb(): DatabaseSync {

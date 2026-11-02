@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import type { PathValidation, Project } from '@shared/types.ts';
-import { api } from '@/api';
+import { api, type LaunchPreview } from '@/api';
+import { PROFILE_HELP } from './SettingsDialog';
 import { upsertProject, useStore } from '@/store';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
@@ -29,6 +30,11 @@ export function ProjectDialog({
   const [worktreeRoot, setWorktreeRoot] = useState('');
   const [model, setModel] = useState('');
   const [tools, setTools] = useState('');
+  const [agentProfile, setAgentProfile] = useState('');
+  const [effort, setEffort] = useState('');
+  const [mcpConfig, setMcpConfig] = useState('');
+  const [preview, setPreview] = useState<LaunchPreview | null>(null);
+  const [showPrompt, setShowPrompt] = useState(false);
   const [validation, setValidation] = useState<PathValidation | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -41,6 +47,12 @@ export function ProjectDialog({
     setWorktreeRoot(project?.worktreeRoot ?? '');
     setModel(project?.model ?? '');
     setTools((project?.allowedTools ?? defaults).join('\n'));
+    setAgentProfile(project?.agentProfile ?? '');
+    setEffort(project?.effort ?? '');
+    setMcpConfig(project?.mcpConfig ?? '');
+    setPreview(null);
+    setShowPrompt(false);
+    if (project) api.launchPreview(project.id).then(setPreview).catch(() => {});
     setValidation(null);
     if (project) api.validatePath(project.path).then(setValidation).catch(() => {});
   }, [open, project, defaults]);
@@ -73,6 +85,9 @@ export function ProjectDialog({
       baseBranch,
       worktreeRoot,
       model,
+      agentProfile,
+      effort,
+      mcpConfig,
       allowedTools: tools.split('\n').map((t) => t.trim()).filter(Boolean),
     };
     try {
@@ -133,12 +148,44 @@ export function ProjectDialog({
           <Field label="Model (optional)" hint="Passed to `claude --model`, e.g. opus, sonnet, claude-sonnet-5-5. Empty = Claude Code default.">
             <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="default" className="font-mono text-xs" />
           </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Agent profile" hint={agentProfile ? PROFILE_HELP[agentProfile as 'lean' | 'full'] : 'Uses the global setting.'}>
+              <Select value={agentProfile} onChange={(e) => setAgentProfile(e.target.value)}>
+                <option value="">Use global setting</option>
+                <option value="lean">Lean</option>
+                <option value="full">Full</option>
+              </Select>
+            </Field>
+            <Field label="Effort" hint="Overrides the global effort.">
+              <Select value={effort} onChange={(e) => setEffort(e.target.value)}>
+                <option value="">Use global setting</option>
+                {['low', 'medium', 'high', 'xhigh', 'max'].map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="MCP config (optional)" hint="JSON or a file path for `claude --mcp-config`. With the lean profile, only these MCP servers are loaded.">
+            <Input value={mcpConfig} onChange={(e) => setMcpConfig(e.target.value)} placeholder=".mcp.json" className="font-mono text-xs" />
+          </Field>
           <Field
             label="Allowed tools (one per line)"
             hint="Passed to `claude --allowedTools`. Agents run with --permission-mode acceptEdits; anything not listed is denied (no unrestricted permissions)."
           >
             <Textarea value={tools} onChange={(e) => setTools(e.target.value)} rows={8} className="font-mono text-xs" />
           </Field>
+          {preview && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/40 p-3">
+              <div className="text-xs font-medium text-muted-foreground">How agents are launched (saved settings)</div>
+              <pre className="whitespace-pre-wrap break-all font-mono text-[11px]">{preview.command}</pre>
+              <button type="button" className="text-[11px] text-sky-600 hover:underline" onClick={() => setShowPrompt(!showPrompt)}>
+                {showPrompt ? 'Hide' : 'Show'} the feature prompt template
+              </button>
+              {showPrompt && <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-background p-2 text-[11px]">{preview.prompt}</pre>}
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

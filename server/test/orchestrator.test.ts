@@ -10,6 +10,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-test-'));
 process.env.ORCH_DATA_DIR = path.join(tmp, 'data');
 process.env.ORCH_CLAUDE_BIN = path.join(here, 'fixtures/fake-claude.mjs');
 process.env.FAKE_CLAUDE_DELAY_MS = '150';
+const argsDir = path.join(tmp, 'args');
+process.env.FAKE_CLAUDE_ARGS_DIR = argsDir;
 
 const repo = path.join(tmp, 'Tiles');
 function sh(cwd: string, ...args: string[]) {
@@ -120,5 +122,47 @@ describe('end-to-end orchestration with a fake Claude Code', () => {
     });
     expect(cancelled.status).toBe('build');
     expect(runs.listRunsForFeature(f.id).map((r: any) => r.status)).toEqual(['cancelled', 'failed']);
+  }, 60000);
+
+  it('passes lean flags and resumes the session for follow-ups', async () => {
+    const { projects, features, runs, orch } = mods;
+    process.env.FAKE_CLAUDE_DELAY_MS = '100';
+    process.env.FAKE_CLAUDE_FAIL = '0';
+    const project = projects.listProjects()[0];
+    const f = features.createFeature(project.id, { title: 'Follow me' });
+    orch.orchestrator.enqueue(f.id);
+    const done = await waitFor(() => {
+      const x = features.getFeature(f.id);
+      return x.status === 'done' && x;
+    });
+    const firstArgs = JSON.parse(fs.readFileSync(path.join(argsDir, fs.readdirSync(argsDir).find((n) => n.startsWith(done.sessionId))!), 'utf8'));
+    expect(firstArgs.args).toContain('--strict-mcp-config');
+    expect(firstArgs.args).toContain('--disable-slash-commands');
+    expect(firstArgs.args).not.toContain('--resume');
+    const firstRun = runs.getRun(done.currentRunId);
+    expect(firstRun.metrics.turns).toBe(6);
+    expect(firstRun.metrics.baselineContextTokens).toBe(8200);
+
+    expect(() => orch.orchestrator.followUp(f.id, '  ')).toThrow(/message is required/);
+    orch.orchestrator.followUp(f.id, 'Also handle the empty state');
+    expect(features.getFeature(f.id).status).toBe('build');
+    const again = await waitFor(() => {
+      const x = features.getFeature(f.id);
+      return x.status === 'done' && x.currentRunId !== done.currentRunId && x;
+    });
+    expect(again.sessionId).toBe(done.sessionId);
+    const followRun = runs.getRun(again.currentRunId);
+    expect(followRun.kind).toBe('followup');
+    expect(followRun.message).toBe('Also handle the empty state');
+    const files = fs.readdirSync(argsDir).filter((n) => n.startsWith(done.sessionId)).sort();
+    const second = JSON.parse(fs.readFileSync(path.join(argsDir, files[files.length - 1]), 'utf8'));
+    expect(second.args[second.args.indexOf('--resume') + 1]).toBe(done.sessionId);
+    expect(fs.realpathSync(second.cwd)).toBe(fs.realpathSync(done.worktreePath));
+    expect(second.args[1]).toContain('Also handle the empty state');
+    const report = runs.getReport(again.currentRunId);
+    expect(report.kind).toBe('followup');
+    expect(report.markdown).toContain('Follow-up request');
+    expect(report.self.docsUpdated).toEqual(['agent-docs/features.md']);
+    expect(report.changes.commits.length).toBe(2);
   }, 60000);
 });

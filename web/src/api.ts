@@ -18,7 +18,25 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
-export type SettingsResponse = Settings & { defaultAllowedTools: string[] };
+export type SettingsResponse = Settings & {
+  defaultAllowedTools: string[];
+  editorPresets: { id: string; label: string }[];
+  platform: string;
+};
+
+export interface SessionInfo {
+  sessionId: string | null;
+  worktreePath: string | null;
+  worktreeExists: boolean;
+  command: string | null;
+  canOpenTerminal: boolean;
+}
+
+export interface LaunchPreview {
+  config: { profile: string; effort: string | null; model: string | null; maxBudgetUsd: number | null; mcpConfig: string | null };
+  command: string;
+  prompt: string;
+}
 
 export interface ProjectInput {
   name?: string;
@@ -28,6 +46,9 @@ export interface ProjectInput {
   worktreeRoot?: string;
   allowedTools?: string[];
   model?: string;
+  agentProfile?: string;
+  effort?: string;
+  mcpConfig?: string;
 }
 
 export const api = {
@@ -49,7 +70,12 @@ export const api = {
   reorder: (projectId: string, status: FeatureStatus, ids: string[]) => req('POST', `/projects/${projectId}/reorder`, { status, ids }),
   cancel: (id: string) => req<Feature>('POST', `/features/${id}/cancel`),
   retry: (id: string) => req<Feature>('POST', `/features/${id}/retry`),
-  openEditor: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/open`, {}),
+  openEditor: (id: string) => req<{ ok: boolean; via: string }>('POST', `/features/${id}/open`, {}),
+  reveal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/reveal`, {}),
+  session: (id: string) => req<SessionInfo>('GET', `/features/${id}/session`),
+  openTerminal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/open-terminal`, {}),
+  followUp: (id: string, message: string) => req<Feature>('POST', `/features/${id}/followup`, { message }),
+  launchPreview: (projectId: string) => req<LaunchPreview>('GET', `/projects/${projectId}/launch-preview`),
   removeWorktree: (id: string, force = false) => req<{ ok: boolean; note: string }>('DELETE', `/features/${id}/worktree?force=${force}`),
   runs: (featureId: string) => req<Run[]>('GET', `/features/${featureId}/runs`),
   changes: (featureId: string) => req<Changes>('GET', `/features/${featureId}/changes`),

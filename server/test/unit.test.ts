@@ -84,3 +84,87 @@ describe('slugify', () => {
     expect(slugify('???')).toBe('feature');
   });
 });
+
+import { LEAN_TOOLS, buildClaudeArgs, previewCommand, resolveLaunchConfig, resumeCommand } from '../src/launch.ts';
+import { allowedBashCommands, buildFollowupPrompt, buildPrompt } from '../src/prompt.ts';
+import { EditorError, findExecutable, openTerminalCommand, resolveEditorCommand } from '../src/editor.ts';
+import type { Project, Settings } from '../../shared/types.ts';
+
+const project: Project = {
+  id: 'prj_1', name: 'Tiles', description: '', path: '/r', baseBranch: 'main', worktreeRoot: '/r-wt',
+  allowedTools: ['Read', 'Bash(npm:*)', 'Bash(git commit:*)'], model: '', agentProfile: '', effort: '', mcpConfig: '', createdAt: '',
+};
+const settings: Settings = { concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude' };
+
+describe('launch args', () => {
+  it('lean profile trims tools, skills, MCP and user settings', () => {
+    const args = buildClaudeArgs('PROMPT', resolveLaunchConfig(project, settings));
+    expect(args.slice(0, 2)).toEqual(['-p', 'PROMPT']);
+    expect(args).toContain('--strict-mcp-config');
+    expect(args).toContain('--disable-slash-commands');
+    expect(args[args.indexOf('--tools') + 1]).toBe(LEAN_TOOLS.join(','));
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('project,local');
+    expect(args[args.indexOf('--effort') + 1]).toBe('medium');
+    expect(args).not.toContain('--max-budget-usd');
+    expect(args).not.toContain('--dangerously-skip-permissions');
+  });
+  it('full profile and project overrides', () => {
+    const cfg = resolveLaunchConfig({ ...project, agentProfile: 'full', effort: 'high', model: 'sonnet', mcpConfig: '/r/.mcp.json' }, { ...settings, maxBudgetUsd: 2 });
+    const args = buildClaudeArgs('P', cfg, { resumeSessionId: 'sess-1' });
+    expect(args).not.toContain('--tools');
+    expect(args).not.toContain('--strict-mcp-config');
+    expect(args[args.indexOf('--resume') + 1]).toBe('sess-1');
+    expect(args[args.indexOf('--effort') + 1]).toBe('high');
+    expect(args[args.indexOf('--model') + 1]).toBe('sonnet');
+    expect(args[args.indexOf('--max-budget-usd') + 1]).toBe('2');
+    expect(args[args.indexOf('--mcp-config') + 1]).toBe('/r/.mcp.json');
+  });
+  it('renders preview and resume commands', () => {
+    expect(previewCommand('claude', ['-p', 'long prompt', '--tools', 'Read,Edit'])).toBe('claude -p "<feature prompt>" --tools Read,Edit');
+    expect(resumeCommand('claude', "/a b/it's", 'sess-1')).toBe(`cd '/a b/it'\\''s' && claude --resume sess-1`);
+  });
+});
+
+describe('prompt', () => {
+  it('defers to CLAUDE.md docs workflow and lists allowed commands', () => {
+    const p = buildPrompt(
+      { id: 'f', projectId: 'p', title: 'T', description: 'D', priority: 'low', status: 'build', position: 0, branch: null, worktreePath: null, sessionId: null, agentStatus: null, currentRunId: null, createdAt: '', updatedAt: '' },
+      project, 'feature/t', 1,
+    );
+    expect(p).toContain('Follow its instructions about which documentation to consult');
+    expect(p).toContain('`npm`, `git commit`');
+    expect(p).toContain('"docs_updated"');
+    expect(allowedBashCommands(['Bash(git status:*)', 'Bash(pwd)', 'Read'])).toEqual(['git status', 'pwd']);
+    expect(buildFollowupPrompt('also add divide', 'feature/x')).toContain('also add divide');
+  });
+});
+
+describe('editor resolution', () => {
+  it('uses a custom absolute command', () => {
+    const r = resolveEditorCommand('/bin/echo -n', '/tmp/x');
+    expect(r).toEqual({ bin: '/bin/echo', args: ['-n', '/tmp/x'], description: '/bin/echo' });
+  });
+  it('gives an actionable error when VS Code is missing', () => {
+    if (findExecutable('code')) return; // VS Code CLI installed on this machine
+    expect(() => resolveEditorCommand('vscode', '/tmp/x', 'linux')).toThrow(/Shell Command: Install 'code' command in PATH/);
+    expect(() => resolveEditorCommand('code', '/tmp/x', 'linux')).toThrow(EditorError);
+  });
+  it('builds a Terminal.app launcher on macOS only', () => {
+    const c = openTerminalCommand(`cd '/a' && claude --resume s`, 'darwin');
+    expect(c.bin).toBe('osascript');
+    expect(c.args[1]).toBe(`tell application "Terminal" to do script "cd '/a' && claude --resume s"`);
+    expect(() => openTerminalCommand('x', 'linux')).toThrow(EditorError);
+  });
+});
+
+describe('parser metrics', () => {
+  it('counts turns, baseline/peak context and permission denials', () => {
+    const p = new StreamParser();
+    const u = (i: number, cw: number, cr: number) => ({ input_tokens: i, cache_creation_input_tokens: cw, cache_read_input_tokens: cr, output_tokens: 1 });
+    p.feedLine(JSON.stringify({ type: 'assistant', message: { id: 'a', content: [], usage: u(5, 20000, 0) } }));
+    p.feedLine(JSON.stringify({ type: 'assistant', message: { id: 'a', content: [], usage: u(5, 20000, 0) } }));
+    p.feedLine(JSON.stringify({ type: 'assistant', message: { id: 'b', content: [], usage: u(5, 100, 20000) } }));
+    p.feedLine(JSON.stringify({ type: 'result', subtype: 'success', result: '', permission_denials: [{ tool_name: 'Bash' }] }));
+    expect(p.metrics).toEqual({ turns: 2, baselineContextTokens: 20005, peakContextTokens: 20105, permissionDenials: 1 });
+  });
+});

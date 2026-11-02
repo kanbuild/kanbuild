@@ -4,6 +4,11 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Activity,
   AlertTriangle,
+  BookOpen,
+  Copy,
+  FolderOpen,
+  MessageSquarePlus,
+  Send,
   Ban,
   Bot,
   ExternalLink,
@@ -19,11 +24,12 @@ import {
   RefreshCw,
   RotateCcw,
   Terminal,
+  SquareTerminal,
   Trash2,
   Wrench,
 } from 'lucide-react';
 import type { Changes, Feature, Report, Run, RunEvent } from '@shared/types.ts';
-import { api, ApiError } from '@/api';
+import { api, ApiError, type SessionInfo } from '@/api';
 import { onRunEvent, onRunUpdate, upsertFeature, useStore } from '@/store';
 import { useNow } from '@/hooks';
 import { cn, formatCost, formatDuration, formatTime, formatTokens } from '@/lib/utils';
@@ -31,7 +37,8 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, SheetContent } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AgentStatusBadge, PriorityBadge, RunProgress, isActive, runDurationMs, totalTokens } from './status';
+import { AgentStatusBadge, PriorityBadge, RunProgress, isActive, newTokens, runDurationMs } from './status';
+import { Textarea } from './ui/input';
 import { confirm } from './confirm';
 import { toast, toastError } from './toast';
 
@@ -131,6 +138,89 @@ function ActivityLog({ runId, active }: { runId: string; active: boolean }) {
   );
 }
 
+const isDocPath = (p: string) => /(^|\/)(agent-docs|docs)\//i.test(p) || /(^|\/)(CLAUDE|README)[^/]*\.md$/i.test(p);
+
+function copy(text: string, msg: string) {
+  if (!navigator.clipboard) {
+    window.prompt('Copy this:', text);
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => toast(msg), () => window.prompt('Copy this:', text));
+}
+
+/** Continue the agent's Claude Code session: dashboard follow-up (headless --resume) or interactively in a terminal. */
+function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: () => void }) {
+  const [info, setInfo] = useState<SessionInfo | null>(null);
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const busy = isActive(feature.agentStatus);
+  useEffect(() => {
+    api.session(feature.id).then(setInfo).catch(() => setInfo(null));
+  }, [feature.id, feature.sessionId, feature.worktreePath]);
+
+  if (!feature.sessionId) return null;
+  const send = async () => {
+    setSending(true);
+    try {
+      upsertFeature(await api.followUp(feature.id, message));
+      setMessage('');
+      toast('Follow-up queued — the agent resumes its session');
+      onQueued();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <section className="space-y-3 rounded-lg border p-4">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <MessageSquarePlus className="h-4 w-4" /> Continue this session
+      </h3>
+      <div className="space-y-2">
+        <Textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          rows={3}
+          placeholder="Ask the agent for more work, e.g. “Also handle the empty state and add a test for it.”"
+          disabled={busy || !info?.worktreeExists}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && message.trim()) send();
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={send} disabled={busy || sending || !message.trim() || !info?.worktreeExists}>
+            <Send /> Send follow-up
+          </Button>
+          <span className="text-[11px] text-muted-foreground">
+            {busy ? 'Available once the current run finishes.' : 'Runs in the background with the same worktree, branch and session; the card moves back to Build.'}
+          </span>
+        </div>
+      </div>
+      {info?.command && (
+        <div className="space-y-2 border-t pt-3">
+          <p className="text-xs text-muted-foreground">Or continue interactively in your terminal (resumes the exact same Claude Code session):</p>
+          <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs">{info.command}</pre>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => copy(info.command!, 'Command copied')}>
+              <Copy /> Copy command
+            </Button>
+            {info.canOpenTerminal && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => api.openTerminal(feature.id).catch(toastError)}>
+                <SquareTerminal /> Open in Terminal
+              </Button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Resuming reloads the previous conversation, so the first turn re-reads its context. Don&apos;t send a dashboard follow-up while the session is open in a terminal.
+          </p>
+        </div>
+      )}
+      {info && !info.worktreeExists && <p className="text-xs text-red-600">The worktree was removed, so the session can no longer be resumed.</p>}
+    </section>
+  );
+}
+
 function ChangesView({ feature, runStatus }: { feature: Feature; runStatus: string | undefined }) {
   const [changes, setChanges] = useState<Changes | null>(null);
   const [loading, setLoading] = useState(false);
@@ -194,7 +284,10 @@ function ChangesView({ feature, runStatus }: { feature: Feature; runStatus: stri
             <Button size="sm" variant="outline" onClick={() => api.openEditor(feature.id).then(() => toast('Opening in editor…')).catch(toastError)}>
               <ExternalLink /> Open in editor
             </Button>
-            <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(feature.worktreePath!).then(() => toast('Path copied'))}>
+            <Button size="sm" variant="outline" onClick={() => api.reveal(feature.id).catch(toastError)}>
+              <FolderOpen /> Reveal in Finder
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => copy(feature.worktreePath!, 'Path copied')}>
               <FolderGit2 /> Copy path
             </Button>
             {!isActive(feature.agentStatus) && (
@@ -221,6 +314,11 @@ function ChangesView({ feature, runStatus }: { feature: Feature; runStatus: stri
               <div key={f.path} className="flex items-center gap-2 px-3 py-1.5 font-mono text-xs">
                 <Icon className={cn('h-3.5 w-3.5 shrink-0', color[f.change])} />
                 <span className="min-w-0 flex-1 truncate">{f.path}</span>
+                {isDocPath(f.path) && (
+                  <Badge variant="violet">
+                    <BookOpen className="h-3 w-3" /> docs
+                  </Badge>
+                )}
                 {!f.committed && <Badge variant="amber">uncommitted</Badge>}
                 <span className={cn('text-[10px] uppercase', color[f.change])}>{f.change}</span>
               </div>
@@ -397,13 +495,13 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                 <Ban /> Cancel agent
               </Button>
             )}
-            {(feature.agentStatus === 'failed' || feature.agentStatus === 'cancelled' || feature.agentStatus === 'completed') && (
+            {(feature.agentStatus === 'failed' || feature.agentStatus === 'cancelled') && (
               <Button size="sm" variant="outline" onClick={() => act(() => api.retry(feature.id), 'New agent run queued')}>
-                <RotateCcw /> {feature.agentStatus === 'completed' ? 'Run again' : 'Retry'}
+                <RotateCcw /> Retry
               </Button>
             )}
             {feature.worktreePath && (
-              <Button size="sm" variant="outline" onClick={() => api.openEditor(feature.id).then(() => toast('Opening in editor…')).catch(toastError)}>
+              <Button size="sm" variant="outline" onClick={() => api.openEditor(feature.id).then((r) => toast(`Opening in ${r.via}…`)).catch(toastError)}>
                 <ExternalLink /> Open in editor
               </Button>
             )}
@@ -418,7 +516,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               >
                 {runs.map((r) => (
                   <option key={r.id} value={r.id}>
-                    Run #{r.attempt} · {r.status}
+                    {r.kind === 'followup' ? 'Follow-up' : 'Run'} #{r.attempt} · {r.status}
                   </option>
                 ))}
               </select>
@@ -458,21 +556,41 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                 <>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Stat label="Duration" value={formatDuration(runDurationMs(run, now))} />
-                    <Stat label="Total tokens" value={formatTokens(totalTokens(run))} />
+                    <Stat label="New tokens" value={formatTokens(newTokens(run))} hint="Input + cache write + output. Excludes cache re-reads." />
                     <Stat label="Est. cost" value={`~${formatCost(run.estimatedCostUsd)}`} hint="Computed from token usage and public API list prices" />
                     <Stat label="Model" value={<span className="font-mono text-xs">{run.model ?? 'default'}</span>} />
                   </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Stat label="Turns" value={run.metrics.turns} hint="API round-trips. Each one re-sends the whole context." />
+                    <Stat
+                      label="Context / turn"
+                      value={`${formatTokens(run.metrics.baselineContextTokens)} → ${formatTokens(run.metrics.peakContextTokens)}`}
+                      hint="Context size on the first turn (system prompt, tools, CLAUDE.md, prompt) and at its peak"
+                    />
+                    <Stat label="Cache re-reads" value={formatTokens(usage.cacheReadTokens)} hint="Context re-read from cache on every turn; billed at ~5–10% of the input price" />
+                    <Stat
+                      label="Denied tool calls"
+                      value={<span className={run.metrics.permissionDenials ? 'text-amber-600' : ''}>{run.metrics.permissionDenials}</span>}
+                      hint="Commands blocked by the allowlist. Each usually costs an extra turn; add common ones in Project settings."
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
                     <Stat label="Input" value={formatTokens(usage.inputTokens)} />
-                    <Stat label="Output" value={formatTokens(usage.outputTokens)} />
                     <Stat label="Cache write" value={formatTokens(usage.cacheCreationTokens)} />
-                    <Stat label="Cache read" value={formatTokens(usage.cacheReadTokens)} />
+                    <Stat label="Output" value={formatTokens(usage.outputTokens)} />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     Costs are <strong>estimates</strong> from public API list prices (including cache pricing)
                     {run.reportedCostUsd !== null && <> · Claude Code reported ~{formatCost(run.reportedCostUsd)}</>}. They are not actual charges — Claude subscription plans are not billed per token.
                   </p>
                 </>
+              )}
+              {!active && <ContinueSession feature={feature} onQueued={() => setTab('activity')} />}
+              {run?.kind === 'followup' && run.message && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold">Follow-up request</h3>
+                  <pre className="whitespace-pre-wrap rounded-md bg-muted/60 p-3 font-sans text-sm">{run.message}</pre>
+                </section>
               )}
               <section>
                 <h3 className="mb-2 text-sm font-semibold">Description</h3>

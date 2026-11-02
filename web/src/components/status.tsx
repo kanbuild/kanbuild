@@ -56,4 +56,8 @@ export function runDurationMs(run: Run | null | undefined, now: number): number 
 export const totalTokens = (run: Run | null | undefined) =>
   run ? run.usage.inputTokens + run.usage.outputTokens + run.usage.cacheCreationTokens + run.usage.cacheReadTokens : 0;
 
+/** Tokens that are actually new on some turn: input + cache writes + output (excludes cache re-reads). */
+export const newTokens = (run: Run | null | undefined) =>
+  run ? run.usage.inputTokens + run.usage.outputTokens + run.usage.cacheCreationTokens : 0;
+
 export const runCost = (run: Run | null | undefined) => run?.estimatedCostUsd ?? run?.reportedCostUsd ?? null;

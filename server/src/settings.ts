@@ -4,8 +4,11 @@ import { bus } from './events.ts';
 
 const DEFAULTS: Settings = {
   concurrency: 2,
+  agentProfile: 'lean',
+  effort: 'medium',
+  maxBudgetUsd: 0,
   defaultModel: '',
-  editorCommand: 'code',
+  editorCommand: 'vscode',
   claudeBinary: process.env.ORCH_CLAUDE_BIN || 'claude',
 };
 
@@ -31,6 +34,16 @@ export function updateSettings(patch: Partial<Settings>): Settings {
       const n = Math.max(1, Math.min(16, Math.floor(Number(v))));
       if (!Number.isFinite(n)) continue;
       stmt.run(k, JSON.stringify(n));
+    } else if (k === 'maxBudgetUsd') {
+      const n = Math.max(0, Number(v));
+      if (!Number.isFinite(n)) continue;
+      stmt.run(k, JSON.stringify(n));
+    } else if (k === 'agentProfile') {
+      if (v !== 'lean' && v !== 'full') continue;
+      stmt.run(k, JSON.stringify(v));
+    } else if (k === 'effort') {
+      if (!['', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(v))) continue;
+      stmt.run(k, JSON.stringify(v));
     } else {
       stmt.run(k, JSON.stringify(String(v)));
     }

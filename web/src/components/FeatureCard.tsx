@@ -4,7 +4,7 @@ import { Coins, GitBranch, Timer, Zap } from 'lucide-react';
 import type { Feature } from '@shared/types.ts';
 import { cn, formatCost, formatDuration, formatTokens } from '@/lib/utils';
 import { useNow } from '@/hooks';
-import { AgentStatusBadge, PriorityBadge, RunProgress, isActive, runCost, runDurationMs, totalTokens } from './status';
+import { AgentStatusBadge, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, totalTokens } from './status';
 
 export function FeatureCardView({ feature, dragging, onClick }: { feature: Feature; dragging?: boolean; onClick?: () => void }) {
   const run = feature.run;
@@ -32,7 +32,9 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
         <div className="mt-2.5 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <AgentStatusBadge status={feature.agentStatus} />
-            {run && run.attempt > 1 && <span className="text-[10px] text-muted-foreground">attempt #{run.attempt}</span>}
+            {run && run.attempt > 1 && (
+              <span className="text-[10px] text-muted-foreground">{run.kind === 'followup' ? 'follow-up' : 'attempt'} #{run.attempt}</span>
+            )}
           </div>
           {feature.agentStatus && <RunProgress feature={feature} run={run} />}
           {run?.currentActivity && active && (
@@ -50,8 +52,12 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
               <span className="inline-flex items-center gap-1" title="Elapsed execution time">
                 <Timer className="h-3 w-3" /> {formatDuration(duration)}
               </span>
-              <span className="inline-flex items-center gap-1" title="Total reported tokens">
-                <Zap className="h-3 w-3" /> {formatTokens(totalTokens(run))}
+              <span
+                className="inline-flex items-center gap-1"
+                title={`New tokens (input + cache write + output). Plus ${formatTokens(run.usage.cacheReadTokens)} cache re-reads over ${run.metrics?.turns ?? 0} turns.`}
+              >
+                <Zap className="h-3 w-3" /> {formatTokens(newTokens(run))}
+                {run.metrics?.turns ? <span className="opacity-70">· {run.metrics.turns} turns</span> : null}
               </span>
               <span className="inline-flex items-center gap-1" title="Estimated cost (not an actual charge)">
                 <Coins className="h-3 w-3" /> ~{formatCost(runCost(run))}

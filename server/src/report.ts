@@ -1,4 +1,4 @@
-import type { AgentSelfReport, AgentStatus, Changes, Feature, Project, Report, Usage } from '../../shared/types.ts';
+import type { AgentSelfReport, AgentStatus, Changes, Feature, Project, Report, RunKind, RunMetrics, Usage } from '../../shared/types.ts';
 
 function asString(v: unknown): string {
   if (typeof v === 'string') return v;
@@ -25,6 +25,7 @@ export function emptySelfReport(): AgentSelfReport {
     tests: { executed: [], passed: null, failed: null, notRun: [], output: '' },
     build: { status: 'unknown', output: '' },
     outstandingIssues: [],
+    docsUpdated: [],
     reported: false,
   };
 }
@@ -78,6 +79,7 @@ export function extractSelfReport(text: string): AgentSelfReport {
     output: asString(b.output),
   };
   report.outstandingIssues = asStringArray(obj.outstanding_issues ?? obj.outstandingIssues ?? obj.issues);
+  report.docsUpdated = asStringArray(obj.docs_updated ?? obj.docsUpdated);
   return report;
 }
 
@@ -105,11 +107,18 @@ export function buildReport(args: {
   durationMs: number | null;
   model: string | null;
   error: string | null;
+  metrics?: RunMetrics;
+  kind?: RunKind;
+  message?: string | null;
 }): Report {
   const { feature, project, self, changes, usage } = args;
   const lines: string[] = [];
-  lines.push(`# Implementation report: ${feature.title}`);
+  lines.push(`# ${args.kind === 'followup' ? 'Follow-up report' : 'Implementation report'}: ${feature.title}`);
   lines.push('');
+  if (args.kind === 'followup' && args.message) {
+    lines.push(`> **Follow-up request:** ${args.message.replace(/\n/g, ' ')}`);
+    lines.push('');
+  }
   lines.push(`- **Project:** ${project.name}`);
   lines.push(`- **Status:** ${args.status}`);
   lines.push(`- **Generated:** ${new Date().toISOString()}`);
@@ -131,6 +140,11 @@ export function buildReport(args: {
     if (!files.length) continue;
     lines.push(`**${kind[0].toUpperCase() + kind.slice(1)} (${files.length})**`);
     for (const f of files) lines.push(`- \`${f.path}\`${f.committed ? '' : ' _(uncommitted)_'}`);
+  }
+  if (self.docsUpdated.length) {
+    lines.push('');
+    lines.push(`**Documentation updated (${self.docsUpdated.length})**`);
+    for (const d of self.docsUpdated) lines.push(`- \`${d}\``);
   }
   if (changes.hasUncommittedChanges) {
     lines.push('');
@@ -187,12 +201,19 @@ export function buildReport(args: {
   lines.push('## 8. Agent usage');
   lines.push(`- **Model:** ${args.model ?? 'unknown'}`);
   lines.push(`- **Duration:** ${fmtDuration(args.durationMs)}`);
+  const fresh = usage.inputTokens + usage.cacheCreationTokens + usage.outputTokens;
+  if (args.metrics) {
+    lines.push(`- **Turns:** ${args.metrics.turns}`);
+    lines.push(`- **Context per turn:** ${n(args.metrics.baselineContextTokens)} at start, ${n(args.metrics.peakContextTokens)} at peak`);
+    lines.push(`- **Permission denials:** ${args.metrics.permissionDenials}`);
+  }
+  lines.push(`- **New tokens (input + cache write + output):** ${n(fresh)}`);
   lines.push(`- **Input tokens:** ${n(usage.inputTokens)}`);
   lines.push(`- **Output tokens:** ${n(usage.outputTokens)}`);
   lines.push(
     `- **Cache creation tokens:** ${n(usage.cacheCreationTokens)}${usage.cacheCreation1hTokens ? ` (${n(usage.cacheCreation1hTokens)} with 1-hour TTL)` : ''}`,
   );
-  lines.push(`- **Cache read tokens:** ${n(usage.cacheReadTokens)}`);
+  lines.push(`- **Cache read tokens:** ${n(usage.cacheReadTokens)} (context re-read on each turn, billed at ~5–10% of input)`);
   lines.push(
     `- **Total reported tokens:** ${n(usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens)}`,
   );
@@ -213,6 +234,8 @@ export function buildReport(args: {
     reportedCostUsd: args.reportedCostUsd,
     durationMs: args.durationMs,
     model: args.model,
+    metrics: args.metrics,
+    kind: args.kind,
     markdown: lines.join('\n'),
   };
 }
