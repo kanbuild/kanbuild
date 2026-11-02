@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bot, FolderGit2, Plus, Settings, SlidersHorizontal, Trash2, Wifi, WifiOff } from 'lucide-react';
 import type { Feature, Project } from '@shared/types.ts';
 import { api } from './api';
-import { loadFeatures, useStore } from './store';
+import { getState, loadFeatures, onNotification, useStore } from './store';
+import { needsAttention } from './components/status';
 import { cn, formatCost } from './lib/utils';
 import { Button } from './components/ui/button';
 import { Board } from './components/Board';
@@ -35,6 +36,32 @@ export default function App() {
 
   const project = projects.find((p) => p.id === projectId) ?? null;
 
+  // Notifications: a desktop notification when the tab is in the background, a toast otherwise.
+  useEffect(
+    () =>
+      onNotification((n) => {
+        const open = () => {
+          const f = n.featureId ? getState().features[n.featureId] : null;
+          if (f) {
+            setProjectId(f.projectId);
+            setDetailId(f.id);
+          }
+        };
+        const hidden = document.visibilityState === 'hidden' || !document.hasFocus();
+        if (hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const dn = new Notification(n.title, { body: n.body, tag: n.id });
+          dn.onclick = () => {
+            window.focus();
+            open();
+            dn.close();
+          };
+        } else {
+          toast(`${n.title} — ${n.body}`, n.level === 'error' ? 'error' : 'info');
+        }
+      }),
+    [],
+  );
+
   useEffect(() => {
     if (projects.length && !project) setProjectId(projects[0].id);
   }, [projects, project]);
@@ -50,10 +77,11 @@ export default function App() {
   }, [projectId]);
 
   const counts = useMemo(() => {
-    const c: Record<string, { active: number; total: number }> = {};
+    const c: Record<string, { active: number; total: number; attention: number }> = {};
     for (const f of Object.values(features)) {
-      c[f.projectId] ??= { active: 0, total: 0 };
+      c[f.projectId] ??= { active: 0, total: 0, attention: 0 };
       c[f.projectId].total++;
+      if (needsAttention(f)) c[f.projectId].attention++;
       if (f.agentStatus === 'running' || f.agentStatus === 'initialising' || f.agentStatus === 'queued') c[f.projectId].active++;
     }
     return c;
@@ -63,7 +91,7 @@ export default function App() {
     () =>
       Object.values(features)
         .filter((f) => f.projectId === projectId)
-        .reduce((sum, f) => sum + (f.run?.estimatedCostUsd ?? 0), 0),
+        .reduce((sum, f) => sum + (f.totals?.costUsd ?? f.run?.estimatedCostUsd ?? 0), 0),
     [features, projectId],
   );
 
@@ -117,6 +145,14 @@ export default function App() {
             >
               <FolderGit2 className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              {counts[p.id]?.attention ? (
+                <span
+                  className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-medium text-amber-800 dark:text-amber-300"
+                  title={`${counts[p.id].attention} feature(s) waiting for you`}
+                >
+                  {counts[p.id].attention} waiting
+                </span>
+              ) : null}
               {counts[p.id]?.active ? (
                 <span className="rounded-full bg-sky-500/15 px-1.5 text-[10px] font-medium text-sky-700 dark:text-sky-300">{counts[p.id].active}</span>
               ) : null}
@@ -153,7 +189,7 @@ export default function App() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {projectCost > 0 && <span className="text-xs text-muted-foreground" title="Sum of the latest run per feature; estimate only">est. ~{formatCost(projectCost)}</span>}
+                {projectCost > 0 && <span className="text-xs text-muted-foreground" title="Sum of all agent runs in this project; estimate only">est. ~{formatCost(projectCost)}</span>}
                 <Button variant="outline" size="sm" onClick={() => setProjectDialog({ open: true, project })}>
                   <SlidersHorizontal /> Project settings
                 </Button>

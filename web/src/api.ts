@@ -1,4 +1,19 @@
-import type { Changes, Feature, FeatureStatus, PathValidation, Priority, Project, Report, Run, RunEvent, Settings } from '@shared/types.ts';
+import type {
+  Changes,
+  DiffResult,
+  Feature,
+  FeatureStatus,
+  GithubStatus,
+  PathValidation,
+  PipelineConfig,
+  Priority,
+  Project,
+  Report,
+  RolesConfig,
+  Run,
+  RunEvent,
+  Settings,
+} from '@shared/types.ts';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body: any) {
@@ -22,6 +37,7 @@ export type SettingsResponse = Settings & {
   defaultAllowedTools: string[];
   editorPresets: { id: string; label: string }[];
   platform: string;
+  github: GithubStatus;
 };
 
 export interface SessionInfo {
@@ -32,10 +48,19 @@ export interface SessionInfo {
   canOpenTerminal: boolean;
 }
 
+export interface LaunchConfigPreview {
+  profile: string;
+  effort: string | null;
+  model: string | null;
+  maxBudgetUsd: number | null;
+  mcpConfig: string | null;
+  readOnly: boolean;
+}
 export interface LaunchPreview {
-  config: { profile: string; effort: string | null; model: string | null; maxBudgetUsd: number | null; mcpConfig: string | null };
+  config: LaunchConfigPreview;
   command: string;
   prompt: string;
+  roles: Record<string, { config: LaunchConfigPreview; command: string; prompt: string }>;
 }
 
 export interface ProjectInput {
@@ -49,7 +74,11 @@ export interface ProjectInput {
   agentProfile?: string;
   effort?: string;
   mcpConfig?: string;
+  pipeline?: Partial<PipelineConfig>;
+  roles?: RolesConfig;
 }
+
+export type GateAction = 'approve' | 'reject' | 'answer';
 
 export const api = {
   settings: () => req<SettingsResponse>('GET', '/settings'),
@@ -79,6 +108,16 @@ export const api = {
   removeWorktree: (id: string, force = false) => req<{ ok: boolean; note: string }>('DELETE', `/features/${id}/worktree?force=${force}`),
   runs: (featureId: string) => req<Run[]>('GET', `/features/${featureId}/runs`),
   changes: (featureId: string) => req<Changes>('GET', `/features/${featureId}/changes`),
+
+  setDependencies: (id: string, dependsOn: string[]) => req<Feature>('PUT', `/features/${id}/dependencies`, { dependsOn }),
+  gate: (id: string, action: GateAction, body: { comment?: string; answers?: string[] } = {}) => req<Feature>('POST', `/features/${id}/gate`, { action, ...body }),
+  createPr: (id: string) => req<Feature>('POST', `/features/${id}/pr`, {}),
+  diff: (id: string, scope = 'all', file?: string) =>
+    req<DiffResult>('GET', `/features/${id}/diff?scope=${encodeURIComponent(scope)}${file ? `&file=${encodeURIComponent(file)}` : ''}`),
+  validationPreview: (projectId: string) => req<{ commands: string[]; source: string }>('GET', `/projects/${projectId}/validation-preview`),
+  githubStatus: () => req<GithubStatus & { error?: string }>('GET', '/settings/github'),
+  setGithubToken: (token: string) => req<GithubStatus>('PUT', '/settings/github', { token }),
+  testNotification: () => req<{ ok: boolean; sent: boolean }>('POST', '/notifications/test', {}),
 
   events: (runId: string, after = 0) => req<RunEvent[]>('GET', `/runs/${runId}/events?after=${after}`),
   report: (runId: string) => req<Report>('GET', `/runs/${runId}/report`),

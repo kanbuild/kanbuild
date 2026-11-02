@@ -42,13 +42,13 @@ export function detectValidationCommands(dir: string): DetectedValidation {
   return { commands: [], source: 'none detected' };
 }
 
-/** Install step for Node projects whose worktree has no node_modules yet. */
+/** Install step for Node projects whose worktree has no node_modules yet (never writes a lockfile). */
 export function installCommand(dir: string): string | null {
   if (!fs.existsSync(path.join(dir, 'package.json')) || fs.existsSync(path.join(dir, 'node_modules'))) return null;
   if (fs.existsSync(path.join(dir, 'pnpm-lock.yaml'))) return 'pnpm install --frozen-lockfile';
   if (fs.existsSync(path.join(dir, 'yarn.lock'))) return 'yarn install --frozen-lockfile';
   if (fs.existsSync(path.join(dir, 'package-lock.json'))) return 'npm ci';
-  return 'npm install';
+  return 'npm install --no-save --no-package-lock';
 }
 
 export function resolveValidationCommands(configured: string[], worktree: string | null): DetectedValidation {

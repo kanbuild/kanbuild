@@ -83,6 +83,12 @@ if (process.env.FAKE_CLAUDE_CLARIFY === role && !answered) {
     msg = `feat: ${title}`;
   }
   fs.appendFileSync(file, `${role}: ${title} ${Date.now()}\n`);
+  // Demo repos with src/math.js get a real code change for the diff viewer.
+  if (role === 'developer' && fs.existsSync('src/math.js')) {
+    const fn = slug.replace(/-(.)/g, (_, c) => c.toUpperCase()).replace(/[^a-zA-Z0-9]/g, '') || 'feature';
+    const src = fs.readFileSync('src/math.js', 'utf8').replace('export const sub = (a, b) => a - b;', `export const sub = (a, b) => {\n  if (typeof a !== 'number') throw new TypeError('a');\n  return a - b;\n};`);
+    fs.writeFileSync('src/math.js', `${src}export const ${fn}${fixReason ? 'Fixed' : ''} = (a, b) => a * b; // ${title}\n`);
+  }
   emit({ type: 'user', session_id: session, message: { content: [{ type: 'tool_result', tool_use_id: 'tu_2', content: 'File written' }] } });
   await sleep(delay);
   assistant([{ type: 'text', text: '[[PROGRESS:testing]]' }, { type: 'tool_use', id: 'tu_3', name: 'Bash', input: { command: 'npm test', description: 'Run unit tests' } }]);

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { Feature, Project, Run, RunEvent, ServerMessage, Settings } from '@shared/types.ts';
+import type { AppNotification, Feature, Project, Run, RunEvent, ServerMessage, Settings } from '@shared/types.ts';
 import { api, type SettingsResponse } from './api';
 
 interface State {
@@ -14,6 +14,14 @@ let state: State = { connected: false, projects: [], features: {}, loadedProject
 const listeners = new Set<() => void>();
 const eventListeners = new Set<(e: RunEvent) => void>();
 const runListeners = new Set<(r: Run) => void>();
+const notificationListeners = new Set<(n: AppNotification) => void>();
+
+export function onNotification(fn: (n: AppNotification) => void) {
+  notificationListeners.add(fn);
+  return () => {
+    notificationListeners.delete(fn);
+  };
+}
 
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
@@ -54,6 +62,8 @@ export function upsertProject(p: Project) {
 export async function loadProjects() {
   const [projects, settings] = await Promise.all([api.projects(), api.settings()]);
   set({ projects, settings });
+  // Load every board so the sidebar can show what needs attention in other projects.
+  await Promise.all(projects.filter((p) => !state.loadedProjects.has(p.id)).map((p) => loadFeatures(p.id).catch(() => {})));
 }
 
 export async function loadFeatures(projectId: string) {
@@ -108,6 +118,9 @@ function handle(msg: ServerMessage) {
       break;
     case 'settings.updated':
       setSettings(msg.settings);
+      break;
+    case 'notification':
+      notificationListeners.forEach((l) => l(msg.notification));
       break;
   }
 }

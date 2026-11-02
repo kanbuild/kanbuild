@@ -31,6 +31,14 @@ function rowToFeature(r: any): Feature {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+  const t = getDb()
+    .prepare(
+      `SELECT COUNT(*) AS runs, COALESCE(SUM(COALESCE(estimated_cost_usd, reported_cost_usd, 0)), 0) AS cost,
+              COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens), 0) AS tokens
+       FROM runs WHERE feature_id = ?`,
+    )
+    .get(f.id) as { runs: number; cost: number; tokens: number };
+  f.totals = { runs: t.runs, costUsd: t.cost, newTokens: t.tokens };
   const deps = dependencyRefs(f.id);
   f.dependsOn = deps.map((d) => d.id);
   f.blockedBy = deps.filter((d) => d.status !== 'done');

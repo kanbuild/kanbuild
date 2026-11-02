@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Feature, Priority } from '@shared/types.ts';
 import { api } from '@/api';
-import { upsertFeature } from '@/store';
+import { upsertFeature, useStore } from '@/store';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Field, Input, Select, Textarea } from './ui/input';
@@ -21,13 +21,19 @@ export function FeatureDialog({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
+  const [dependsOn, setDependsOn] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const allFeatures = useStore((s) => s.features);
+  const candidates = Object.values(allFeatures)
+    .filter((f) => f.projectId === projectId && f.id !== feature?.id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   useEffect(() => {
     if (open) {
       setTitle(feature?.title ?? '');
       setDescription(feature?.description ?? '');
       setPriority(feature?.priority ?? 'medium');
+      setDependsOn(feature?.dependsOn ?? []);
     }
   }, [open, feature]);
 
@@ -35,9 +41,11 @@ export function FeatureDialog({
     e.preventDefault();
     setSaving(true);
     try {
-      const f = feature
+      let f = feature
         ? await api.updateFeature(feature.id, { title, description, priority })
         : await api.createFeature(projectId, { title, description, priority });
+      const before = feature?.dependsOn ?? [];
+      if (dependsOn.length !== before.length || dependsOn.some((d) => !before.includes(d))) f = await api.setDependencies(f.id, dependsOn);
       upsertFeature(f);
       onOpenChange(false);
     } catch (err) {
@@ -76,6 +84,23 @@ export function FeatureDialog({
               <option value="high">High</option>
             </Select>
           </Field>
+          {candidates.length > 0 && (
+            <Field label="Depends on" hint="This feature waits until these are Done. If exactly one of them is not merged yet, its branch is used as the starting point (stacked branch).">
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+                {candidates.map((c) => (
+                  <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={dependsOn.includes(c.id)}
+                      onChange={(e) => setDependsOn((d) => (e.target.checked ? [...d, c.id] : d.filter((x) => x !== c.id)))}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                    <span className="text-[10px] uppercase text-muted-foreground">{c.status}</span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

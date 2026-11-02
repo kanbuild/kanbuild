@@ -162,6 +162,10 @@ export function buildReport(args: {
 }): Report {
   const { feature, project, self, changes, usage } = args;
   const lines: string[] = [];
+  // Planner and reviewer don't change code or run tests: skip those sections.
+  const readOnly = args.role === 'planner' || args.role === 'reviewer';
+  let section = 0;
+  const h = (title: string) => `## ${++section}. ${title}`;
   lines.push(`# ${reportTitle(args.kind, args.role, args.fixReason)}: ${feature.title}`);
   lines.push('');
   if ((args.kind === 'followup' || args.kind === 'fix' || args.kind === 'answer') && args.message) {
@@ -175,7 +179,7 @@ export function buildReport(args: {
   if (args.error) lines.push(`- **Error:** ${args.error}`);
   lines.push('');
 
-  lines.push('## 1. Summary');
+  lines.push(h('Summary'));
   lines.push(self.summary || '_The agent did not provide a summary._');
   lines.push('');
 
@@ -205,17 +209,21 @@ export function buildReport(args: {
     lines.push('');
   }
 
-  lines.push('## 2. Implementation details');
-  lines.push(self.implementationDetails || '_Not reported._');
-  lines.push('');
+  if (!readOnly) {
+    lines.push(h('Implementation details'));
+    lines.push(self.implementationDetails || '_Not reported._');
+    lines.push('');
+  }
 
-  lines.push('## 3. Files changed');
+  lines.push(h('Files changed'));
   if (changes.files.length === 0) lines.push('_No file changes detected._');
   for (const kind of ['created', 'modified', 'deleted', 'renamed'] as const) {
     const files = changes.files.filter((f) => f.change === kind);
     if (!files.length) continue;
     lines.push(`**${kind[0].toUpperCase() + kind.slice(1)} (${files.length})**`);
+    lines.push('');
     for (const f of files) lines.push(`- \`${f.path}\`${f.committed ? '' : ' _(uncommitted)_'}`);
+    lines.push('');
   }
   if (self.docsUpdated.length) {
     lines.push('');
@@ -228,40 +236,42 @@ export function buildReport(args: {
   }
   lines.push('');
 
-  lines.push('## 4. Testing results');
-  if (!self.reported) {
-    lines.push('_The agent did not report structured test results._');
-  } else {
-    const t = self.tests;
-    lines.push(`- **Passed:** ${t.passed ?? 'n/a'}`);
-    lines.push(`- **Failed:** ${t.failed ?? 'n/a'}`);
-    lines.push(`- **Executed:** ${t.executed.length ? t.executed.map((e) => `\`${e}\``).join(', ') : 'none'}`);
-    if (t.notRun.length) lines.push(`- **Not executed:** ${t.notRun.join('; ')}`);
-    if (t.output) {
+  if (!readOnly) {
+    lines.push(h('Testing results'));
+    if (!self.reported) {
+      lines.push('_The agent did not report structured test results._');
+    } else {
+      const t = self.tests;
+      lines.push(`- **Passed:** ${t.passed ?? 'n/a'}`);
+      lines.push(`- **Failed:** ${t.failed ?? 'n/a'}`);
+      lines.push(`- **Executed:** ${t.executed.length ? t.executed.map((e) => `\`${e}\``).join(', ') : 'none'}`);
+      if (t.notRun.length) lines.push(`- **Not executed:** ${t.notRun.join('; ')}`);
+      if (t.output) {
+        lines.push('');
+        lines.push('```text');
+        lines.push(t.output.slice(0, 6000));
+        lines.push('```');
+      }
+    }
+    lines.push('');
+
+    lines.push(h('Build status'));
+    lines.push(`**${self.build.status}**`);
+    if (self.build.output) {
       lines.push('');
       lines.push('```text');
-      lines.push(t.output.slice(0, 6000));
+      lines.push(self.build.output.slice(0, 6000));
       lines.push('```');
     }
-  }
-  lines.push('');
-
-  lines.push('## 5. Build status');
-  lines.push(`**${self.build.status}**`);
-  if (self.build.output) {
     lines.push('');
-    lines.push('```text');
-    lines.push(self.build.output.slice(0, 6000));
-    lines.push('```');
   }
-  lines.push('');
 
-  lines.push('## 6. Outstanding issues');
+  lines.push(h('Outstanding issues'));
   if (self.outstandingIssues.length) for (const i of self.outstandingIssues) lines.push(`- ${i}`);
   else lines.push(self.reported ? '_None reported._' : '_Not reported._');
   lines.push('');
 
-  lines.push('## 7. Git information');
+  lines.push(h('Git information'));
   lines.push(`- **Branch:** \`${changes.branch ?? 'n/a'}\` (base \`${changes.baseBranch}\`)`);
   lines.push(`- **Head commit:** \`${changes.headCommit ?? 'n/a'}\``);
   lines.push(`- **Worktree:** \`${changes.worktreePath ?? 'n/a'}\``);
@@ -274,7 +284,7 @@ export function buildReport(args: {
   lines.push('- Branches are never merged automatically.');
   lines.push('');
 
-  lines.push('## 8. Agent usage');
+  lines.push(h('Agent usage'));
   lines.push(`- **Model:** ${args.model ?? 'unknown'}`);
   lines.push(`- **Duration:** ${fmtDuration(args.durationMs)}`);
   const fresh = usage.inputTokens + usage.cacheCreationTokens + usage.outputTokens;

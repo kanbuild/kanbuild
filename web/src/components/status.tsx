@@ -1,5 +1,5 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, Clock, Loader2, XCircle } from 'lucide-react';
-import type { AgentStatus, Feature, Priority, Run } from '@shared/types.ts';
+import { AlertTriangle, CheckCircle2, CircleDashed, ClipboardCheck, Clock, Link2, Loader2, MessageCircleQuestion, ShieldCheck, XCircle } from 'lucide-react';
+import type { AgentRole, AgentStatus, Feature, GateType, Priority, Run } from '@shared/types.ts';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 
@@ -61,3 +61,69 @@ export const newTokens = (run: Run | null | undefined) =>
   run ? run.usage.inputTokens + run.usage.outputTokens + run.usage.cacheCreationTokens : 0;
 
 export const runCost = (run: Run | null | undefined) => run?.estimatedCostUsd ?? run?.reportedCostUsd ?? null;
+
+const ROLE_LABEL: Record<AgentRole, string> = {
+  planner: 'Planner',
+  developer: 'Developer',
+  tester: 'Tester',
+  reviewer: 'Reviewer',
+  validator: 'Validation',
+};
+export const roleLabel = (r: AgentRole) => ROLE_LABEL[r] ?? r;
+
+/** What a run does, e.g. "Plan", "Fix (validation)", "Review". */
+export function runLabel(run: Pick<Run, 'kind' | 'role' | 'fixReason'>): string {
+  switch (run.kind) {
+    case 'plan':
+      return 'Plan';
+    case 'feature':
+      return 'Develop';
+    case 'fix':
+      return run.fixReason === 'validation' ? 'Fix (validation)' : run.fixReason === 'review' ? 'Fix (review)' : 'Fix (your feedback)';
+    case 'test':
+      return 'Tests';
+    case 'review':
+      return 'Review';
+    case 'validate':
+      return 'Validation';
+    case 'answer':
+      return `${roleLabel(run.role)} (answers)`;
+    case 'followup':
+      return 'Follow-up';
+  }
+}
+
+const GATE_META: Record<GateType, { label: string; icon: React.ElementType }> = {
+  plan_approval: { label: 'Approve plan', icon: ClipboardCheck },
+  clarification: { label: 'Needs your input', icon: MessageCircleQuestion },
+  final_approval: { label: 'Awaiting approval', icon: ShieldCheck },
+};
+
+/** The pipeline step chip shown on cards: checkpoint, dependency wait, or the active step. */
+export function PipelineChip({ feature }: { feature: Feature }) {
+  if (feature.gate) {
+    const m = GATE_META[feature.gate.type];
+    const Icon = m.icon;
+    return (
+      <Badge variant="amber">
+        <Icon className="h-3 w-3" /> {m.label}
+      </Badge>
+    );
+  }
+  const run = feature.run;
+  if (feature.status === 'build' && feature.agentStatus === 'queued' && feature.blockedBy.length && !feature.worktreePath) {
+    return (
+      <Badge variant="outline" className="text-muted-foreground" title={feature.blockedBy.map((d) => d.title).join(', ')}>
+        <Link2 className="h-3 w-3" /> Blocked by {feature.blockedBy.length === 1 ? feature.blockedBy[0].title : `${feature.blockedBy.length} features`}
+      </Badge>
+    );
+  }
+  if (run && isActive(feature.agentStatus) && !(run.kind === 'feature' && run.role === 'developer' && run.cycle === 1 && run.attempt === 1)) {
+    return <Badge variant="violet">{runLabel(run)}</Badge>;
+  }
+  return null;
+}
+
+export function needsAttention(f: Feature) {
+  return !!f.gate || (f.status === 'build' && f.agentStatus === 'failed');
+}

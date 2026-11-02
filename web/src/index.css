@@ -54,3 +54,9 @@
 .prose-report pre { @apply bg-muted rounded-md p-3 overflow-x-auto text-xs mb-2; }
 .prose-report pre code { @apply bg-transparent p-0; }
 .prose-report blockquote { @apply border-l-2 pl-3 text-sm text-muted-foreground; }
+.prose-report h3 { @apply text-sm font-semibold mt-4 mb-1.5; }
+.prose-report ol { @apply list-decimal pl-5 text-sm mb-2 space-y-0.5; }
+.prose-report li > p { @apply mb-0; }
+.prose-report table { @apply w-full border-collapse text-xs mb-3; }
+.prose-report th { @apply border bg-muted px-2 py-1 text-left font-medium; }
+.prose-report td { @apply border px-2 py-1 align-top; }

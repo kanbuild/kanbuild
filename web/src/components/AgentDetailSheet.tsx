@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { Markdown } from './Markdown';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Activity,
@@ -12,14 +12,13 @@ import {
   Ban,
   Bot,
   ExternalLink,
-  FileMinus,
-  FilePen,
-  FilePlus,
   FileText,
   FlaskConical,
   FolderGit2,
-  GitCommit,
+  GitPullRequest,
   LayoutDashboard,
+  ListChecks,
+  Workflow,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -28,7 +27,7 @@ import {
   Trash2,
   Wrench,
 } from 'lucide-react';
-import type { Changes, Feature, Report, Run, RunEvent } from '@shared/types.ts';
+import type { Changes, Feature, Report, ReviewResult, Run, RunEvent } from '@shared/types.ts';
 import { api, ApiError, type SessionInfo } from '@/api';
 import { onRunEvent, onRunUpdate, upsertFeature, useStore } from '@/store';
 import { useNow } from '@/hooks';
@@ -37,7 +36,10 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, SheetContent } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AgentStatusBadge, PriorityBadge, RunProgress, isActive, newTokens, runDurationMs } from './status';
+import { AgentStatusBadge, PipelineChip, PriorityBadge, RunProgress, isActive, newTokens, roleLabel, runDurationMs, runLabel } from './status';
+import { DiffViewer } from './DiffViewer';
+import { GatePanel } from './GatePanel';
+import { PipelineTab } from './PipelineTab';
 import { Textarea } from './ui/input';
 import { confirm } from './confirm';
 import { toast, toastError } from './toast';
@@ -221,7 +223,9 @@ function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: ()
   );
 }
 
-function ChangesView({ feature, runStatus }: { feature: Feature; runStatus: string | undefined }) {
+type DiffFocus = { file: string; line: number | null; nonce: number } | null;
+
+function ChangesView({ feature, runStatus, focus }: { feature: Feature; runStatus: string | undefined; focus: DiffFocus }) {
   const [changes, setChanges] = useState<Changes | null>(null);
   const [loading, setLoading] = useState(false);
   const load = useCallback(() => {
@@ -256,97 +260,125 @@ function ChangesView({ feature, runStatus }: { feature: Feature; runStatus: stri
   };
 
   if (!feature.worktreePath && !feature.branch) return <p className="p-6 text-sm text-muted-foreground">No worktree yet — it is created when the feature enters Build.</p>;
-  const icon = { created: FilePlus, modified: FilePen, deleted: FileMinus, renamed: FilePen };
-  const color = { created: 'text-emerald-600', modified: 'text-sky-600', deleted: 'text-red-600', renamed: 'text-violet-600' };
-  const counts = { created: 0, modified: 0, deleted: 0, renamed: 0 };
-  changes?.files.forEach((f) => counts[f.change]++);
+  const docs = changes?.files.filter((f) => isDocPath(f.path)) ?? [];
 
   return (
-    <div className="space-y-5 p-5">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="rounded-lg border p-3 text-xs">
-          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Branch</div>
-          <div className="break-all font-mono">{feature.branch ?? '—'}</div>
-          <div className="mt-1 text-muted-foreground">base: <span className="font-mono">{changes?.baseBranch}</span></div>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="space-y-3 border-b p-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span>
+            <span className="text-muted-foreground">Branch </span>
+            <span className="font-mono">{feature.branch ?? '—'}</span>
+            <span className="text-muted-foreground"> from </span>
+            <span className="font-mono">{changes?.baseBranch}</span>
+          </span>
+          <span className="min-w-0 break-all">
+            <span className="text-muted-foreground">Worktree </span>
+            <span className="font-mono">{feature.worktreePath ?? 'removed'}</span>
+            {changes && !changes.worktreeExists && feature.worktreePath && <span className="ml-1 text-red-600">(not found)</span>}
+          </span>
+          {changes && (
+            <span className="text-muted-foreground">
+              {changes.commits.length} commit(s) · {changes.files.length} file(s)
+              {docs.length > 0 && (
+                <Badge variant="violet" className="ml-2" title={docs.map((d) => d.path).join('\n')}>
+                  <BookOpen className="h-3 w-3" /> {docs.length} doc(s)
+                </Badge>
+              )}
+            </span>
+          )}
         </div>
-        <div className="rounded-lg border p-3 text-xs">
-          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Worktree</div>
-          <div className="break-all font-mono">{feature.worktreePath ?? 'removed'}</div>
-          {changes && !changes.worktreeExists && feature.worktreePath && <div className="mt-1 text-red-600">Directory not found</div>}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={cn(loading && 'animate-spin')} /> Refresh
-        </Button>
-        {feature.worktreePath && (
-          <>
-            <Button size="sm" variant="outline" onClick={() => api.openEditor(feature.id).then(() => toast('Opening in editor…')).catch(toastError)}>
-              <ExternalLink /> Open in editor
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => api.reveal(feature.id).catch(toastError)}>
-              <FolderOpen /> Reveal in Finder
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => copy(feature.worktreePath!, 'Path copied')}>
-              <FolderGit2 /> Copy path
-            </Button>
-            {!isActive(feature.agentStatus) && (
-              <Button size="sm" variant="ghost" className="text-red-600" onClick={removeWorktree}>
-                <Trash2 /> Remove worktree
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={cn(loading && 'animate-spin')} /> Refresh
+          </Button>
+          {feature.worktreePath && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => api.openEditor(feature.id).then(() => toast('Opening in editor…')).catch(toastError)}>
+                <ExternalLink /> Open in editor
               </Button>
-            )}
-          </>
+              <Button size="sm" variant="outline" onClick={() => api.reveal(feature.id).catch(toastError)}>
+                <FolderOpen /> Reveal in Finder
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => copy(feature.worktreePath!, 'Path copied')}>
+                <FolderGit2 /> Copy path
+              </Button>
+              {!isActive(feature.agentStatus) && (
+                <Button size="sm" variant="ghost" className="text-red-600" onClick={removeWorktree}>
+                  <Trash2 /> Remove worktree
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+        {changes?.hasUncommittedChanges && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            The worktree has uncommitted changes.
+          </div>
         )}
+        <p className="text-[11px] text-muted-foreground">Branches are never merged automatically. Review and merge manually, or open a pull request.</p>
       </div>
-      {changes?.hasUncommittedChanges && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          The worktree has uncommitted changes.
-        </div>
+      {changes?.worktreeExists ? (
+        <DiffViewer featureId={feature.id} commits={changes.commits} refreshKey={`${runStatus}-${feature.run?.commitHash}`} focus={focus} />
+      ) : (
+        changes && <p className="p-6 text-sm text-muted-foreground">The worktree no longer exists, so its diff cannot be shown.</p>
       )}
-      <section>
-        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          Files <span className="text-xs font-normal text-muted-foreground">{counts.created} created · {counts.modified} modified · {counts.deleted} deleted</span>
-        </h3>
-        <div className="divide-y rounded-lg border">
-          {changes?.files.map((f) => {
-            const Icon = icon[f.change];
-            return (
-              <div key={f.path} className="flex items-center gap-2 px-3 py-1.5 font-mono text-xs">
-                <Icon className={cn('h-3.5 w-3.5 shrink-0', color[f.change])} />
-                <span className="min-w-0 flex-1 truncate">{f.path}</span>
-                {isDocPath(f.path) && (
-                  <Badge variant="violet">
-                    <BookOpen className="h-3 w-3" /> docs
-                  </Badge>
-                )}
-                {!f.committed && <Badge variant="amber">uncommitted</Badge>}
-                <span className={cn('text-[10px] uppercase', color[f.change])}>{f.change}</span>
-              </div>
-            );
-          })}
-          {changes && changes.files.length === 0 && <p className="p-4 text-xs text-muted-foreground">No changes relative to {changes.baseBranch}.</p>}
-        </div>
-      </section>
-      <section>
-        <h3 className="mb-2 text-sm font-semibold">Commits</h3>
-        <div className="divide-y rounded-lg border">
-          {changes?.commits.map((c) => (
-            <div key={c.hash} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-              <GitCommit className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="font-mono text-muted-foreground">{c.hash.slice(0, 8)}</span>
-              <span className="min-w-0 flex-1 truncate">{c.subject}</span>
-              <span className="text-muted-foreground">{new Date(c.date).toLocaleString()}</span>
-            </div>
-          ))}
-          {changes && changes.commits.length === 0 && <p className="p-4 text-xs text-muted-foreground">No commits on top of {changes.baseBranch}.</p>}
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Branches are never merged automatically. Review and merge manually.</p>
-      </section>
+    </div>
+  );
+}
+
+function ReviewSection({ review, onJump }: { review: ReviewResult; onJump: (file: string, line: number | null) => void }) {
+  const sev = { blocker: 'red', major: 'amber', minor: 'blue', nit: 'gray' } as const;
+  return (
+    <section className="space-y-2">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        Code review <Badge variant={review.verdict === 'approve' ? 'green' : 'red'}>{review.verdict === 'approve' ? 'approved' : 'changes requested'}</Badge>
+      </h3>
+      {review.summary && <p className="text-sm">{review.summary}</p>}
+      <div className="divide-y rounded-lg border">
+        {review.findings.map((f, i) => (
+          <div key={i} className="flex items-start gap-2 px-3 py-2 text-xs">
+            <Badge variant={sev[f.severity]}>{f.severity}</Badge>
+            <button className="shrink-0 font-mono text-sky-700 hover:underline dark:text-sky-400" onClick={() => onJump(f.file, f.line)} title="Show in diff">
+              {f.file}
+              {f.line ? `:${f.line}` : ''}
+            </button>
+            <span className="min-w-0 flex-1">{f.message}</span>
+          </div>
+        ))}
+        {review.findings.length === 0 && <p className="p-3 text-xs text-muted-foreground">No findings.</p>}
+      </div>
+    </section>
+  );
+}
+
+function ValidationView({ run }: { run: Run }) {
+  const results = run.validation ?? [];
+  return (
+    <div className="space-y-4 p-5">
+      <p className="text-sm text-muted-foreground">Commands run by the orchestrator in the worktree (no agent, no tokens). The first failure stops the run and is sent back to the developer.</p>
+      <div className="divide-y rounded-lg border">
+        {results.map((r, i) => {
+          const ok = r.exitCode === 0 && !r.timedOut;
+          return (
+            <details key={i} open={!ok} className="group">
+              <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs">
+                <Badge variant={ok ? 'green' : 'red'}>{ok ? 'passed' : r.timedOut ? 'timed out' : `exit ${r.exitCode}`}</Badge>
+                <span className="min-w-0 flex-1 truncate font-mono">{r.command}</span>
+                <span className="text-muted-foreground">{(r.durationMs / 1000).toFixed(1)}s</span>
+              </summary>
+              <pre className="max-h-80 overflow-auto bg-muted px-3 py-2 text-[11px]">{r.output || '(no output)'}</pre>
+            </details>
+          );
+        })}
+        {results.length === 0 && <p className="p-4 text-xs text-muted-foreground">{isActive(run.status) ? 'Running…' : 'No validation commands ran.'}</p>}
+      </div>
     </div>
   );
 }
 
 function TestsView({ report, run }: { report: Report | null; run: Run | null }) {
+  if (run?.role === 'validator') return <ValidationView run={run} />;
   if (!report) {
     return (
       <p className="p-6 text-sm text-muted-foreground">
@@ -407,11 +439,16 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [tab, setTab] = useState('overview');
+  const [focus, setFocus] = useState<DiffFocus>(null);
+  const [creatingPr, setCreatingPr] = useState(false);
+  const project = useStore((s) => (feature ? s.projects.find((p) => p.id === feature.projectId) ?? null : null));
+  const githubConfigured = useStore((s) => !!s.settings?.github?.configured);
 
   useEffect(() => {
     setSelectedRunId(null);
     setRuns([]);
     setTab(feature?.status === 'done' ? 'report' : 'overview');
+    setFocus(null);
     if (featureId) api.runs(featureId).then(setRuns).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featureId]);
@@ -475,6 +512,23 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
     }
   };
 
+  const createPr = async () => {
+    setCreatingPr(true);
+    try {
+      const f = await api.createPr(feature.id);
+      upsertFeature(f);
+      toast(`Pull request #${f.prNumber} ready`);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setCreatingPr(false);
+    }
+  };
+  const jumpToDiff = (file: string, line: number | null) => {
+    setFocus({ file, line, nonce: Date.now() });
+    setTab('changes');
+  };
+
   const usage = run?.usage;
   return (
     <Dialog open={!!featureId} onOpenChange={(o) => !o && onClose()}>
@@ -483,7 +537,9 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
           <div className="flex items-center gap-2">
             <PriorityBadge priority={feature.priority} />
             <AgentStatusBadge status={run?.status ?? feature.agentStatus} />
+            <PipelineChip feature={feature} />
             <Badge variant="outline" className="capitalize">{feature.status}</Badge>
+            {run && <span className="text-xs text-muted-foreground">{runLabel(run)} · {roleLabel(run.role)}</span>}
           </div>
           <DialogPrimitive.Title className="mt-2 text-lg font-semibold leading-tight">{feature.title}</DialogPrimitive.Title>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -496,9 +552,34 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               </Button>
             )}
             {(feature.agentStatus === 'failed' || feature.agentStatus === 'cancelled') && (
-              <Button size="sm" variant="outline" onClick={() => act(() => api.retry(feature.id), 'New agent run queued')}>
-                <RotateCcw /> Retry
+              <Button size="sm" variant="outline" onClick={() => act(() => api.retry(feature.id), 'Retrying the step')} title="Re-runs the step that failed (same role and instructions)">
+                <RotateCcw /> Retry {feature.run ? runLabel(feature.run).toLowerCase() : ''}
               </Button>
+            )}
+            {feature.gate && (
+              <Button size="sm" variant="outline" onClick={() => act(() => api.cancel(feature.id), 'Pipeline stopped')}>
+                <Ban /> Stop pipeline
+              </Button>
+            )}
+            {feature.prUrl ? (
+              <Button size="sm" variant="outline" asChild>
+                <a href={feature.prUrl} target="_blank" rel="noreferrer">
+                  <GitPullRequest /> PR #{feature.prNumber}
+                </a>
+              </Button>
+            ) : (
+              feature.branch &&
+              !isActive(feature.agentStatus) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={creatingPr || !githubConfigured}
+                  onClick={createPr}
+                  title={githubConfigured ? 'Push the branch and open a pull request (never merges)' : 'Add a GitHub token in Settings first'}
+                >
+                  <GitPullRequest /> {creatingPr ? 'Creating PR…' : 'Create PR'}
+                </Button>
+              )
             )}
             {feature.worktreePath && (
               <Button size="sm" variant="outline" onClick={() => api.openEditor(feature.id).then((r) => toast(`Opening in ${r.via}…`)).catch(toastError)}>
@@ -516,7 +597,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               >
                 {runs.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.kind === 'followup' ? 'Follow-up' : 'Run'} #{r.attempt} · {r.status}
+                    #{r.attempt} {runLabel(r)} · {r.status}
                   </option>
                 ))}
               </select>
@@ -524,13 +605,16 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
           </div>
         </div>
 
+        {feature.gate && <GatePanel feature={feature} runs={runs} onShowDiff={() => setTab('changes')} onDone={() => setSelectedRunId(null)} />}
+
         <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
           <div className="border-b px-5 py-2">
             <TabsList>
               <TabsTrigger value="overview"><LayoutDashboard className="h-3.5 w-3.5" /> Overview</TabsTrigger>
+              <TabsTrigger value="pipeline"><Workflow className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
               <TabsTrigger value="activity"><Activity className="h-3.5 w-3.5" /> Activity</TabsTrigger>
               <TabsTrigger value="changes"><FolderGit2 className="h-3.5 w-3.5" /> Changes</TabsTrigger>
-              <TabsTrigger value="tests"><FlaskConical className="h-3.5 w-3.5" /> Tests</TabsTrigger>
+              <TabsTrigger value="tests">{run?.role === 'validator' ? <ListChecks className="h-3.5 w-3.5" /> : <FlaskConical className="h-3.5 w-3.5" />} {run?.role === 'validator' ? 'Validation' : 'Tests'}</TabsTrigger>
               <TabsTrigger value="report"><FileText className="h-3.5 w-3.5" /> Report</TabsTrigger>
             </TabsList>
           </div>
@@ -551,6 +635,21 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                 </section>
               ) : (
                 <p className="text-sm text-muted-foreground">No agent has run yet. Drag the card into Build to start one.</p>
+              )}
+              {report?.self.review && <ReviewSection review={report.self.review} onJump={jumpToDiff} />}
+              {report?.self.plan && !feature.gate && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold">Implementation plan</h3>
+                  <div className="prose-report max-h-96 overflow-y-auto rounded-md border p-4 text-sm">
+                    <Markdown>{report.self.plan}</Markdown>
+                  </div>
+                </section>
+              )}
+              {report && report.self.needsClarification.length > 0 && !feature.gate && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold">Questions asked</h3>
+                  <ul className="list-disc space-y-1 pl-5 text-sm">{report.self.needsClarification.map((q) => <li key={q}>{q}</li>)}</ul>
+                </section>
               )}
               {run && usage && (
                 <>
@@ -585,10 +684,12 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                   </p>
                 </>
               )}
-              {!active && <ContinueSession feature={feature} onQueued={() => setTab('activity')} />}
-              {run?.kind === 'followup' && run.message && (
+              {!active && !feature.gate && <ContinueSession feature={feature} onQueued={() => setTab('activity')} />}
+              {run?.message && ['followup', 'fix', 'answer', 'feature', 'plan'].includes(run.kind) && (
                 <section>
-                  <h3 className="mb-2 text-sm font-semibold">Follow-up request</h3>
+                  <h3 className="mb-2 text-sm font-semibold">
+                    {run.kind === 'followup' ? 'Follow-up request' : run.kind === 'answer' ? 'Your answers' : run.kind === 'fix' ? 'What to fix' : 'Your comments'}
+                  </h3>
                   <pre className="whitespace-pre-wrap rounded-md bg-muted/60 p-3 font-sans text-sm">{run.message}</pre>
                 </section>
               )}
@@ -610,8 +711,21 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
             {runId ? <ActivityLog runId={runId} active={active} /> : <p className="p-6 text-sm text-muted-foreground">No activity yet.</p>}
           </TabsContent>
 
-          <TabsContent value="changes" className="min-h-0 flex-1 overflow-y-auto">
-            <ChangesView feature={feature} runStatus={run?.status} />
+          <TabsContent value="pipeline" className="min-h-0 flex-1 overflow-y-auto">
+            <PipelineTab
+              feature={feature}
+              config={project?.pipeline ?? null}
+              runs={runs}
+              selectedRunId={runId}
+              onSelect={(r) => {
+                setSelectedRunId(r.id);
+                setTab(r.role === 'validator' ? 'tests' : 'report');
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="changes" className="min-h-0 flex-1">
+            <ChangesView feature={feature} runStatus={run?.status} focus={focus} />
           </TabsContent>
 
           <TabsContent value="tests" className="min-h-0 flex-1 overflow-y-auto">
@@ -621,7 +735,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
           <TabsContent value="report" className="min-h-0 flex-1 overflow-y-auto">
             {report ? (
               <div className="prose-report p-5">
-                <ReactMarkdown>{report.markdown}</ReactMarkdown>
+                <Markdown>{report.markdown}</Markdown>
               </div>
             ) : (
               <p className="p-6 text-sm text-muted-foreground">{active ? 'The implementation report is generated when the agent finishes.' : 'No report for this run.'}</p>

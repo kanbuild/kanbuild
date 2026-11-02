@@ -159,6 +159,8 @@ export interface Feature {
   baseRef: string | null;
   prUrl: string | null;
   prNumber: number | null;
+  /** Sums over all runs of the feature (pipelines run several agents). */
+  totals?: { runs: number; costUsd: number; newTokens: number };
   createdAt: string;
   updatedAt: string;
   /** Snapshot of the current run, joined in by the API for card display. */
