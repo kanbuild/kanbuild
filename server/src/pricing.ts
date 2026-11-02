@@ -2,7 +2,8 @@ import type { Usage } from '../../shared/types.ts';
 
 /**
  * Anthropic first-party API list prices in USD per million tokens.
- * cacheWrite = 5-minute cache write (1.25x input); cacheRead as published (≈0.1x input unless noted).
+ * cacheWrite = 5-minute cache write (1.25x input), cacheWrite1h = 1-hour cache write (2x input; Claude Code's default),
+ * cacheRead as published (≈0.1x input unless noted).
  *
  * These are ESTIMATES. Users on a Claude subscription (Pro/Max/Team) are not billed per token,
  * and API invoices are the only source of truth for actual charges.
@@ -11,6 +12,7 @@ export interface Price {
   input: number;
   output: number;
   cacheWrite: number;
+  cacheWrite1h: number;
   cacheRead: number;
 }
 
@@ -18,6 +20,7 @@ const p = (input: number, output: number, cacheRead = input * 0.1): Price => ({
   input,
   output,
   cacheWrite: input * 1.25,
+  cacheWrite1h: input * 2,
   cacheRead,
 });
 
@@ -64,10 +67,13 @@ export function priceFor(model: string | null | undefined): Price | null {
 export function estimateCost(usage: Usage, model: string | null | undefined): number | null {
   const price = priceFor(model);
   if (!price) return null;
+  const write1h = Math.min(usage.cacheCreation1hTokens ?? 0, usage.cacheCreationTokens);
+  const write5m = usage.cacheCreationTokens - write1h;
   return (
     (usage.inputTokens * price.input +
       usage.outputTokens * price.output +
-      usage.cacheCreationTokens * price.cacheWrite +
+      write5m * price.cacheWrite +
+      write1h * price.cacheWrite1h +
       usage.cacheReadTokens * price.cacheRead) /
     1_000_000
   );

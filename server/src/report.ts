@@ -189,7 +189,9 @@ export function buildReport(args: {
   lines.push(`- **Duration:** ${fmtDuration(args.durationMs)}`);
   lines.push(`- **Input tokens:** ${n(usage.inputTokens)}`);
   lines.push(`- **Output tokens:** ${n(usage.outputTokens)}`);
-  lines.push(`- **Cache creation tokens:** ${n(usage.cacheCreationTokens)}`);
+  lines.push(
+    `- **Cache creation tokens:** ${n(usage.cacheCreationTokens)}${usage.cacheCreation1hTokens ? ` (${n(usage.cacheCreation1hTokens)} with 1-hour TTL)` : ''}`,
+  );
   lines.push(`- **Cache read tokens:** ${n(usage.cacheReadTokens)}`);
   lines.push(
     `- **Total reported tokens:** ${n(usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens)}`,

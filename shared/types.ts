@@ -31,6 +31,8 @@ export interface Usage {
   outputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  /** Portion of cacheCreationTokens written with the 1-hour TTL (billed at 2x input instead of 1.25x). */
+  cacheCreation1hTokens?: number;
 }
 
 export interface Feature {

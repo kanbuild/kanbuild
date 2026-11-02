@@ -115,6 +115,7 @@ export class StreamParser {
       total.outputTokens += u.outputTokens;
       total.cacheCreationTokens += u.cacheCreationTokens;
       total.cacheReadTokens += u.cacheReadTokens;
+      total.cacheCreation1hTokens = (total.cacheCreation1hTokens ?? 0) + (u.cacheCreation1hTokens ?? 0);
     }
     return total;
   }
@@ -197,6 +198,7 @@ export class StreamParser {
         outputTokens: m.usage.output_tokens ?? 0,
         cacheCreationTokens: m.usage.cache_creation_input_tokens ?? 0,
         cacheReadTokens: m.usage.cache_read_input_tokens ?? 0,
+        cacheCreation1hTokens: m.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
       });
     }
     const out: ParsedEvent[] = [];
@@ -267,6 +269,7 @@ export class StreamParser {
           outputTokens: u.outputTokens ?? 0,
           cacheCreationTokens: u.cacheCreationInputTokens ?? 0,
           cacheReadTokens: u.cacheReadInputTokens ?? 0,
+          cacheCreation1hTokens: u.cacheCreationEphemeral1hInputTokens ?? 0,
         };
       }
       const total = emptyUsage();
@@ -275,6 +278,7 @@ export class StreamParser {
         total.outputTokens += u.outputTokens;
         total.cacheCreationTokens += u.cacheCreationTokens;
         total.cacheReadTokens += u.cacheReadTokens;
+        total.cacheCreation1hTokens = (total.cacheCreation1hTokens ?? 0) + (u.cacheCreation1hTokens ?? 0);
       }
       if (total.inputTokens + total.outputTokens + total.cacheCreationTokens + total.cacheReadTokens > 0) {
         this.finalUsage = total;
@@ -285,6 +289,7 @@ export class StreamParser {
         outputTokens: msg.usage.output_tokens ?? 0,
         cacheCreationTokens: msg.usage.cache_creation_input_tokens ?? 0,
         cacheReadTokens: msg.usage.cache_read_input_tokens ?? 0,
+        cacheCreation1hTokens: msg.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
       };
     }
     this.result = {

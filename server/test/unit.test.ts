@@ -18,7 +18,7 @@ describe('StreamParser', () => {
     expect(p.model).toBe('claude-opus-5-5');
     expect(p.progress).toBe(15);
     expect(p.currentActivity).toBe('Editing …/b/c/d.ts');
-    expect(p.usage).toEqual({ inputTokens: 10, outputTokens: 7, cacheCreationTokens: 0, cacheReadTokens: 0 });
+    expect(p.usage).toEqual({ inputTokens: 10, outputTokens: 7, cacheCreationTokens: 0, cacheReadTokens: 0, cacheCreation1hTokens: 0 });
     expect(events.some((e) => e.kind === 'error')).toBe(true);
     p.feedLine(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'ok', total_cost_usd: 0.5, modelUsage: { 'claude-opus-5-5': { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 1, cacheCreationInputTokens: 2 } } }));
     expect(p.result?.isError).toBe(false);
@@ -54,6 +54,11 @@ describe('pricing', () => {
   it('includes cache pricing', () => {
     const c = estimateCost({ inputTokens: 1_000_000, outputTokens: 1_000_000, cacheCreationTokens: 1_000_000, cacheReadTokens: 1_000_000 }, 'claude-sonnet-5-5');
     expect(c).toBeCloseTo(2 + 10 + 2.5 + 0.2, 5);
+  });
+  it('prices 1-hour cache writes at 2x input', () => {
+    // Matches the cost Claude Code itself reported for a real Opus 5.5 run.
+    const c = estimateCost({ inputTokens: 13, outputTokens: 1577, cacheCreationTokens: 10873, cacheReadTokens: 162710, cacheCreation1hTokens: 10873 }, 'claude-opus-5-5');
+    expect(c).toBeCloseTo(0.151118, 5);
   });
 });
 

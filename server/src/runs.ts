@@ -26,6 +26,7 @@ export function rowToRun(r: any): RunRow {
       outputTokens: r.output_tokens,
       cacheCreationTokens: r.cache_creation_tokens,
       cacheReadTokens: r.cache_read_tokens,
+      cacheCreation1hTokens: r.cache_creation_1h_tokens,
     },
     model: r.model,
     reportedCostUsd: r.reported_cost_usd,
@@ -119,8 +120,8 @@ export function updateRun(id: string, patch: RunPatch, opts: { silent?: boolean 
     if (v === undefined) continue;
     if (k === 'usage') {
       const u = v as Usage;
-      sets.push('input_tokens=?', 'output_tokens=?', 'cache_creation_tokens=?', 'cache_read_tokens=?');
-      vals.push(u.inputTokens, u.outputTokens, u.cacheCreationTokens, u.cacheReadTokens);
+      sets.push('input_tokens=?', 'output_tokens=?', 'cache_creation_tokens=?', 'cache_read_tokens=?', 'cache_creation_1h_tokens=?');
+      vals.push(u.inputTokens, u.outputTokens, u.cacheCreationTokens, u.cacheReadTokens, u.cacheCreation1hTokens ?? 0);
     } else if (k === 'report') {
       sets.push('report_json=?');
       vals.push(JSON.stringify(v));

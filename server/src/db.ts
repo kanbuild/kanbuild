@@ -87,6 +87,7 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  `ALTER TABLE runs ADD COLUMN cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 export function getDb(): DatabaseSync {
