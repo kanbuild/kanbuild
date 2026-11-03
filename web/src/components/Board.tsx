@@ -22,6 +22,7 @@ import { api } from '@/api';
 import { getState, upsertFeature, useStore } from '@/store';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
+import { FeatureComposer } from './FeatureComposer';
 import { FeatureCardView, SortableFeatureCard } from './FeatureCard';
 import { confirm } from './confirm';
 import { toast, toastError } from './toast';
@@ -75,6 +76,7 @@ function Column({
   onOpen,
   onAdd,
   stats,
+  composer,
 }: {
   id: FeatureStatus;
   title: string;
@@ -85,29 +87,36 @@ function Column({
   onOpen: (f: Feature) => void;
   onAdd?: () => void;
   stats?: React.ReactNode;
+  composer?: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={cn('flex min-h-0 w-full min-w-[280px] flex-1 flex-col rounded-xl bg-muted/50 transition-colors', isOver && 'bg-sky-500/10')}>
-      <div className="flex items-center justify-between px-3 pb-2 pt-3">
+    <div
+      ref={setNodeRef}
+      className={cn('metal-glass flex min-h-0 w-full min-w-[280px] flex-1 flex-col rounded-2xl transition-shadow', isOver && 'shadow-glow')}
+    >
+      <div className="flex items-center justify-between px-3 pb-1.5 pt-3">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <span className="rounded-full bg-background px-1.5 text-xs text-muted-foreground">{ids.length}</span>
+          <span className="metal-raised flex h-6 w-6 items-center justify-center rounded-lg">
+            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+          <span className="metal-inset rounded-full px-2 text-[11px] tabular-nums text-muted-foreground">{ids.length}</span>
         </div>
         {onAdd && (
-          <Button size="icon" variant="ghost" onClick={onAdd} title="New feature">
+          <Button size="icon-round" variant="secondary" className="h-7 w-7" onClick={onAdd} title="New feature">
             <Plus />
           </Button>
         )}
       </div>
       <p className="px-3 pb-2 text-[11px] text-muted-foreground">{stats ?? hint}</p>
-      <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-3">
+      {composer && <div className="px-2 pb-2">{composer}</div>}
+      <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-3 pt-1">
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((fid) => features[fid] && <SortableFeatureCard key={fid} feature={features[fid]} onOpen={onOpen} />)}
         </SortableContext>
         {ids.length === 0 && (
-          <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-foreground/15 p-6 text-center text-xs text-muted-foreground">
             {id === 'backlog' ? 'No features yet' : id === 'build' ? 'Drop a feature here to start an agent' : 'Nothing finished yet'}
           </div>
         )}
@@ -119,6 +128,7 @@ function Column({
 export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen: (f: Feature) => void; onAdd: () => void }) {
   const allFeatures = useStore((s) => s.features);
   const concurrency = useStore((s) => s.settings?.concurrency ?? 2);
+  const loaded = useStore((s) => s.loadedProjects.has(projectId));
   const features = useMemo(() => {
     const out: Record<string, Feature> = {};
     for (const f of Object.values(allFeatures)) if (f.projectId === projectId) out[f.id] = f;
@@ -223,6 +233,15 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
         setCols(serverCols);
       }}
     >
+      {loaded && Object.keys(features).length === 0 ? (
+        <div className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto p-8">
+          <div className="text-center">
+            <h2 className="chrome-text text-3xl font-semibold tracking-tight sm:text-4xl">What should the agents build next?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Add a feature to the backlog, then drag it into Build to start an agent.</p>
+          </div>
+          <FeatureComposer projectId={projectId} hero onMore={onAdd} />
+        </div>
+      ) : (
       <div className="flex h-full min-h-0 gap-3 overflow-x-auto p-4">
         {COLUMNS.map((c) => (
           <Column
@@ -237,9 +256,11 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
                 ? `${running} running · ${queued} queued · limit ${concurrency} concurrent (global)`
                 : undefined
             }
+            composer={c.id === 'backlog' ? <FeatureComposer projectId={projectId} onMore={onAdd} /> : undefined}
           />
         ))}
       </div>
+      )}
       <DragOverlay>{activeFeature ? <FeatureCardView feature={activeFeature} dragging /> : null}</DragOverlay>
     </DndContext>
   );

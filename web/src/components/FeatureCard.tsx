@@ -18,15 +18,16 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
     <div
       onClick={onClick}
       className={cn(
-        'group cursor-pointer rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow hover:shadow-md',
-        dragging && 'rotate-1 shadow-lg ring-2 ring-sky-400/50',
-        feature.agentStatus === 'failed' && 'border-red-300 dark:border-red-900',
-        isWaiting(feature) && 'border-amber-400 ring-2 ring-amber-400/30 dark:border-amber-600',
+        'metal-surface sheen group relative cursor-pointer rounded-xl p-3 text-card-foreground transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-lg',
+        dragging && 'rotate-1 shadow-glow',
+        active && feature.agentStatus !== 'queued' && 'running-edge',
+        feature.agentStatus === 'failed' && 'border-red-300 dark:border-red-900/80',
+        isWaiting(feature) && 'shadow-gold-glow',
         blocked && feature.status === 'backlog' && 'border-dashed',
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium leading-snug">{feature.title}</h3>
+        <h3 className="text-sm font-medium leading-snug tracking-tight">{feature.title}</h3>
         <PriorityBadge priority={feature.priority} />
       </div>
       {feature.description && feature.status === 'backlog' && (
@@ -52,7 +53,7 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
             )}
           </div>
           {feature.agentStatus && <RunProgress feature={feature} run={run} />}
-          {feature.gate && run?.currentActivity && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{run.currentActivity}</p>}
+          {feature.gate && run?.currentActivity && <p className="text-xs font-medium text-amber-700 dark:text-[hsl(var(--gold))]">{run.currentActivity}</p>}
           {run?.currentActivity && active && (
             <p className="truncate text-xs text-muted-foreground" title={run.currentActivity}>
               {run.currentActivity}
@@ -106,7 +107,7 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/15 dark:border-emerald-800 dark:text-emerald-300"
             >
               <GitPullRequest className="h-3 w-3" /> PR #{feature.prNumber}
             </a>

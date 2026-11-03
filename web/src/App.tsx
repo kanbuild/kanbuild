@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, FolderGit2, Plus, Settings, SlidersHorizontal, Trash2, Wifi, WifiOff } from 'lucide-react';
+import { ArrowRight, Bot, Coins, FolderGit2, GitBranch, LayoutGrid, Monitor, Moon, MoveRight, Plus, Settings, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
 import { API_VERSION, type Feature, type Project } from '@shared/types.ts';
 import { api } from './api';
 import { getState, loadFeatures, onNotification, useStore } from './store';
 import { needsAttention } from './components/status';
 import { cn, formatCost } from './lib/utils';
 import { Button } from './components/ui/button';
+import { useTheme, setTheme, type Theme } from './theme';
 import { Board } from './components/Board';
 import { FeatureDialog } from './components/FeatureDialog';
 import { ProjectDialog } from './components/ProjectDialog';
@@ -15,6 +16,37 @@ import { ConfirmHost, confirm } from './components/confirm';
 import { Toaster, toast, toastError } from './components/toast';
 
 const LAST_PROJECT_KEY = 'orch:lastProject';
+
+const THEMES: { id: Theme; icon: React.ElementType; label: string }[] = [
+  { id: 'system', icon: Monitor, label: 'Follow system' },
+  { id: 'light', icon: Sun, label: 'Light' },
+  { id: 'dark', icon: Moon, label: 'Dark' },
+];
+
+/** Segmented Monitor / Sun / Moon switch (Emergent's account-menu theme switcher). */
+function ThemeToggle() {
+  const theme = useTheme();
+  return (
+    <div className="metal-inset flex items-center gap-0.5 rounded-full p-0.5" role="radiogroup" aria-label="Theme">
+      {THEMES.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="radio"
+          aria-checked={theme === t.id}
+          title={t.label}
+          onClick={() => setTheme(t.id)}
+          className={cn(
+            'flex h-6 w-6 items-center justify-center rounded-full transition-colors',
+            theme === t.id ? 'metal-raised text-foreground' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <t.icon className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function readLastProject(): string | null {
   try {
@@ -117,48 +149,48 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <aside className="flex w-64 shrink-0 flex-col border-r bg-muted/30">
-        <div className="flex items-center gap-2 px-4 py-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Bot className="h-4 w-4" />
+    <div className="app-backdrop flex h-screen overflow-hidden">
+      <aside className="metal-glass m-2 mr-0 flex w-64 shrink-0 flex-col rounded-2xl">
+        <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
+          <div className="metal-chrome flex h-8 w-8 items-center justify-center rounded-xl">
+            <Bot className="h-4 w-4 text-[hsl(var(--accent-hi))]" />
           </div>
-          <div>
-            <div className="text-sm font-semibold leading-tight">AI Orchestrator</div>
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              {connected ? <Wifi className="h-3 w-3 text-emerald-500" /> : <WifiOff className="h-3 w-3 text-red-500" />}
+          <div className="min-w-0">
+            <div className="chrome-text text-sm font-semibold leading-tight tracking-tight">AI Orchestrator</div>
+            <div className="mt-0.5 inline-flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500 shadow-[0_0_6px_hsl(152_80%_45%)]' : 'animate-pulse bg-red-500')} />
               {connected ? 'local backend connected' : 'reconnecting…'}
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-between px-4 pb-1 pt-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Projects</span>
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setProjectDialog({ open: true, project: null })} title="Add project">
+        <div className="flex items-center justify-between px-4 pb-1.5 pt-2">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Projects</span>
+          <Button size="icon-round" variant="secondary" className="h-6 w-6 [&_svg]:size-3.5" onClick={() => setProjectDialog({ open: true, project: null })} title="Add project">
             <Plus />
           </Button>
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-2">
           {projects.map((p) => (
             <div
               key={p.id}
               onClick={() => setProjectId(p.id)}
               className={cn(
-                'group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                p.id === projectId ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground hover:bg-background/60',
+                'group flex cursor-pointer items-center gap-2 rounded-xl border border-transparent px-2.5 py-1.5 text-sm transition-colors',
+                p.id === projectId ? 'metal-raised font-medium' : 'text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground',
               )}
             >
-              <FolderGit2 className="h-4 w-4 shrink-0" />
+              <FolderGit2 className={cn('h-4 w-4 shrink-0', p.id === projectId && 'text-primary')} />
               <span className="min-w-0 flex-1 truncate">{p.name}</span>
               {counts[p.id]?.attention ? (
-                <span
-                  className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-medium text-amber-800 dark:text-amber-300"
-                  title={`${counts[p.id].attention} feature(s) waiting for you`}
-                >
+                <span className="metal-gold rounded-full px-1.5 text-[10px] font-semibold" title={`${counts[p.id].attention} feature(s) waiting for you`}>
                   {counts[p.id].attention} waiting
                 </span>
               ) : null}
               {counts[p.id]?.active ? (
-                <span className="rounded-full bg-sky-500/15 px-1.5 text-[10px] font-medium text-sky-700 dark:text-sky-300">{counts[p.id].active}</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-sky-700 dark:text-cyan-200" title="Active agents">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+                  {counts[p.id].active}
+                </span>
               ) : null}
               <button
                 className="hidden text-muted-foreground hover:text-red-600 group-hover:block"
@@ -174,32 +206,43 @@ export default function App() {
           ))}
           {projects.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">No projects yet.</p>}
         </nav>
-        <div className="border-t p-2">
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setSettingsOpen(true)}>
+        <div className="flex items-center justify-between gap-2 border-t border-foreground/10 p-2">
+          <Button variant="ghost" size="sm" className="justify-start" onClick={() => setSettingsOpen(true)}>
             <Settings /> Settings
           </Button>
+          <ThemeToggle />
         </div>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
         {outOfSync && (
-          <div className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-            The dashboard and the backend are different versions, so some controls may be missing. Stop the backend, run <code className="font-mono">npm start</code> (it rebuilds the dashboard), then reload this page.
+          <div className="metal-gold mx-2 mt-2 rounded-xl px-4 py-2 text-sm">
+            The dashboard and the backend are different versions, so some controls may be missing. Stop the backend, run <code className="font-mono font-semibold">npm start</code> (it rebuilds the dashboard), then reload this page.
           </div>
         )}
         {project ? (
           <>
-            <header className="flex items-center justify-between gap-4 border-b px-5 py-3">
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold">{project.name}</h1>
-                <p className="truncate font-mono text-[11px] text-muted-foreground" title={project.path}>
-                  {project.path} · base {project.baseBranch}
+            <header className="flex items-center justify-between gap-4 px-4 pb-1 pt-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="metal-accent inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold">
+                  <LayoutGrid className="h-3.5 w-3.5" /> Board
+                </span>
+                <div className="metal-raised flex h-7 min-w-0 max-w-[16rem] shrink-0 items-center gap-2 rounded-lg px-2.5" title={project.path}>
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  <h1 className="truncate text-sm font-semibold tracking-tight">{project.name}</h1>
+                </div>
+                <p className="hidden min-w-0 truncate font-mono text-[11px] text-muted-foreground md:block" title={project.path}>
+                  {project.path} · <GitBranch className="inline h-3 w-3" /> {project.baseBranch}
                   {project.description && <span className="font-sans"> · {project.description}</span>}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {projectCost > 0 && <span className="text-xs text-muted-foreground" title="Sum of all agent runs in this project; estimate only">est. ~{formatCost(projectCost)}</span>}
-                <Button variant="outline" size="sm" onClick={() => setProjectDialog({ open: true, project })}>
+                {projectCost > 0 && (
+                  <span className="metal-gold inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold tabular-nums" title="Sum of all agent runs in this project; estimate only">
+                    <Coins className="h-3.5 w-3.5" /> est. ~{formatCost(projectCost)}
+                  </span>
+                )}
+                <Button variant="chrome" size="sm" onClick={() => setProjectDialog({ open: true, project })}>
                   <SlidersHorizontal /> Project settings
                 </Button>
                 <Button size="sm" onClick={() => setFeatureDialog({ open: true, feature: null })}>
@@ -212,15 +255,39 @@ export default function App() {
             </div>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-            <FolderGit2 className="h-10 w-10 text-muted-foreground" />
-            <h1 className="text-lg font-semibold">Register your first project</h1>
-            <p className="max-w-md text-sm text-muted-foreground">
-              Point the orchestrator at an existing local Git repository. Each feature you move into Build gets its own branch, worktree and Claude Code agent.
-            </p>
-            <Button onClick={() => setProjectDialog({ open: true, project: null })}>
-              <Plus /> Add project
-            </Button>
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-8 text-center">
+            <span className="metal-raised inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" /> Local-first · your repos never leave this machine
+            </span>
+            <h1 className="chrome-text text-4xl font-semibold tracking-tight sm:text-5xl">What will you build today?</h1>
+            <div className="metal-surface w-full max-w-xl rounded-2xl p-5 text-left">
+              <div className="flex items-start gap-3">
+                <div className="metal-chrome flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
+                  <FolderGit2 className="h-4 w-4 text-[hsl(var(--accent-hi))]" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold">Register your first project</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Point the orchestrator at an existing local Git repository. Each feature you move into Build gets its own branch, worktree and Claude Code agent.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button onClick={() => setProjectDialog({ open: true, project: null })}>
+                  <Plus /> Add project <ArrowRight />
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+              {['Register a repo', 'Add a feature', 'Drag it into Build'].map((step, i) => (
+                <span key={step} className="inline-flex items-center gap-2">
+                  {i > 0 && <MoveRight className="h-3.5 w-3.5 opacity-60" />}
+                  <span className="metal-raised inline-flex h-7 items-center gap-1.5 rounded-full px-3 font-medium">
+                    <span className="text-primary">{i + 1}</span> {step}
+                  </span>
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </main>

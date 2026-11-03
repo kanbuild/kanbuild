@@ -31,6 +31,7 @@ AI Orchestrator.app
    - Spawns the backend (`cwd` = home) and waits up to 30 s for `probe()` to see the orchestrator.
 4. `createWindow()` (main.ts:151):
    - Bounds are remembered in `<userData>/window-state.json`.
+   - `backgroundColor: '#0b0c0e'` matches the dashboard's dark `--background` token, so there is no flash before the page paints.
    - `setWindowOpenHandler` and `will-navigate` send every URL that is not the dashboard's own origin (`isLocalUrl`, env.ts:53) to `shell.openExternal`, such as GitHub PR links.
 5. The menu (`buildMenu`, main.ts:187) has the standard app/Edit/Window menus. View → *Open in Browser*. Help → *Show Backend Log* and *Open Data Folder*.
 

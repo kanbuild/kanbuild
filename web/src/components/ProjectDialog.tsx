@@ -35,7 +35,7 @@ const ROLE_HELP: Record<ClaudeRole, string> = {
 
 function Toggle({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
   return (
-    <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-2.5 ${disabled ? 'opacity-50' : 'hover:bg-muted/40'}`}>
+    <label className={`flex cursor-pointer items-start gap-2 rounded-xl border p-2.5 metal-raised ${disabled ? 'opacity-50' : ''}`}>
       <input type="checkbox" className="mt-0.5" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span>
         <span className="block text-sm font-medium">{label}</span>
@@ -235,7 +235,7 @@ export function ProjectDialog({
               if (next.skills) setSkills(next.skills);
             }}
           />
-          <details className="rounded-lg border p-3" open={!!mcpConfig}>
+          <details className="metal-surface rounded-xl p-3" open={!!mcpConfig}>
             <summary className="cursor-pointer text-sm font-semibold">Advanced: extra MCP config</summary>
             <div className="pt-3">
               <Field label="MCP config (optional)" hint="JSON or a file path passed as an additional `claude --mcp-config`, on top of the servers selected above.">
@@ -243,7 +243,7 @@ export function ProjectDialog({
               </Field>
             </div>
           </details>
-          <fieldset className="space-y-3 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-3 rounded-xl p-3">
             <legend className="px-1 text-sm font-semibold">Pipeline</legend>
             <p className="text-[11px] text-muted-foreground">What happens after a card enters Build. Every step runs in the feature&apos;s worktree; branches are never merged.</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -285,7 +285,7 @@ export function ProjectDialog({
               </div>
             </div>
           </fieldset>
-          <fieldset className="space-y-2 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-2 rounded-xl p-3">
             <legend className="px-1 text-sm font-semibold">Agent roles</legend>
             <p className="text-[11px] text-muted-foreground">Optional model and effort per role (empty = the project/global setting). A cheaper model often works well for review.</p>
             {CLAUDE_ROLES.map((role) => (
@@ -312,7 +312,7 @@ export function ProjectDialog({
             <Textarea value={tools} onChange={(e) => setTools(e.target.value)} rows={8} className="font-mono text-xs" />
           </Field>
           {shownPreview && (
-            <div className="space-y-1.5 rounded-lg border bg-muted/40 p-3">
+            <div className="metal-inset space-y-1.5 rounded-xl p-3">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 How agents are launched (saved settings)
                 {preview?.roles && (

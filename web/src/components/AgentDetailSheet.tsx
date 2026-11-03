@@ -3,6 +3,8 @@ import { Markdown } from './Markdown';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Activity,
+  ArrowUp,
+  CheckCircle2,
   AlertTriangle,
   BookOpen,
   Copy,
@@ -39,6 +41,7 @@ import { Dialog, SheetContent } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { AgentStatusBadge, PipelineChip, isPaused, PriorityBadge, RunProgress, isActive, newTokens, roleLabel, runDurationMs, runLabel } from './status';
 import { DiffViewer } from './DiffViewer';
+import { Chip } from './ui/chip';
 import { GatePanel } from './GatePanel';
 import { PipelineTab } from './PipelineTab';
 import { Textarea } from './ui/input';
@@ -48,7 +51,7 @@ import { toast, toastError } from './toast';
 
 function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
-    <div className="rounded-lg border p-3" title={hint}>
+    <div className="metal-surface rounded-xl p-3" title={hint}>
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-semibold tabular-nums">{value}</div>
     </div>
@@ -71,15 +74,22 @@ function EventRow({ e }: { e: RunEvent }) {
   const s = EVENT_STYLE[e.kind];
   const Icon = s.icon;
   return (
-    <div className={cn('group flex gap-2 px-3 py-1 font-mono text-xs hover:bg-muted/50', (e.kind === 'error' || e.kind === 'stderr') && 'bg-red-500/5', e.kind === 'warning' && 'bg-amber-500/5')}>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{formatTime(e.ts)}</span>
-      <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', s.cls)} />
+    <div
+      className={cn(
+        'group mx-3 my-1 flex gap-2 rounded-lg border border-transparent px-2.5 py-1.5 font-mono text-xs transition-colors hover:border-border hover:bg-foreground/[0.03]',
+        (e.kind === 'tool_use' || e.kind === 'tool_result') && 'metal-raised hover:filter-none',
+        (e.kind === 'error' || e.kind === 'stderr') && 'border-red-500/20 bg-red-500/5',
+        e.kind === 'warning' && 'border-amber-500/20 bg-amber-500/5',
+      )}
+    >
+      <span className="shrink-0 tabular-nums text-muted-foreground/80">{formatTime(e.ts)}</span>
+      {e.kind === 'tool_result' ? <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" /> : <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', s.cls)} />}
       <div className="min-w-0 flex-1">
         <div className={cn('whitespace-pre-wrap break-words', s.cls, e.detail && 'cursor-pointer')} onClick={() => e.detail && setOpen(!open)}>
           {e.summary}
           {e.detail && <span className="ml-1 text-muted-foreground">{open ? '▾' : '▸'}</span>}
         </div>
-        {open && e.detail && <pre className="mt-1 max-h-80 overflow-auto rounded bg-muted p-2 text-[11px] text-muted-foreground">{e.detail}</pre>}
+        {open && e.detail && <pre className="metal-inset mt-1.5 max-h-80 overflow-auto rounded-lg p-2 text-[11px] text-muted-foreground">{e.detail}</pre>}
       </div>
     </div>
   );
@@ -117,13 +127,13 @@ function ActivityLog({ runId, active }: { runId: string; active: boolean }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b px-3 py-2 text-xs">
         {(['all', 'tools', 'problems'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={cn('rounded px-2 py-0.5 capitalize', filter === f ? 'bg-muted font-medium' : 'text-muted-foreground')}>
+          <Chip key={f} active={filter === f} onClick={() => setFilter(f)} className="h-6 px-2.5 text-[11px] capitalize">
             {f}
             {f === 'problems' && problems > 0 && ` (${problems})`}
-          </button>
+          </Chip>
         ))}
         <span className="ml-auto text-muted-foreground">{events.length} events</span>
-        {active && <span className="inline-flex items-center gap-1 text-sky-600"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-500" /> live</span>}
+        {active && <span className="inline-flex items-center gap-1 text-sky-600 dark:text-cyan-300"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> live</span>}
       </div>
       <div
         ref={ref}
@@ -177,7 +187,7 @@ function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: ()
     }
   };
   return (
-    <section className="space-y-3 rounded-lg border p-4">
+    <section className="metal-surface space-y-3 rounded-2xl p-4">
       <h3 className="flex items-center gap-2 text-sm font-semibold">
         <MessageSquarePlus className="h-4 w-4" /> Continue this session
       </h3>
@@ -194,8 +204,8 @@ function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: ()
           }}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={send} disabled={busy || sending || !message.trim() || !info?.worktreeExists}>
-            <Send /> Send follow-up
+          <Button size="sm" className="rounded-full" onClick={send} disabled={busy || sending || !message.trim() || !info?.worktreeExists}>
+            <ArrowUp /> Send follow-up
           </Button>
           <span className="text-[11px] text-muted-foreground">
             {busy ? 'Available once the current run finishes.' : 'Runs in the background with the same worktree, branch and session; the card moves back to Build.'}
@@ -205,7 +215,7 @@ function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: ()
       {info?.command && (
         <div className="space-y-2 border-t pt-3">
           <p className="text-xs text-muted-foreground">Or continue interactively in your terminal (resumes the exact same Claude Code session):</p>
-          <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs">{info.command}</pre>
+          <pre className="metal-inset overflow-x-auto rounded-lg p-2 font-mono text-xs">{info.command}</pre>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => copy(info.command!, 'Command copied')}>
               <Copy /> Copy command
@@ -338,7 +348,7 @@ function ReviewSection({ review, onJump }: { review: ReviewResult; onJump: (file
         Code review <Badge variant={review.verdict === 'approve' ? 'green' : 'red'}>{review.verdict === 'approve' ? 'approved' : 'changes requested'}</Badge>
       </h3>
       {review.summary && <p className="text-sm">{review.summary}</p>}
-      <div className="divide-y rounded-lg border">
+      <div className="metal-surface divide-y overflow-hidden rounded-xl">
         {review.findings.map((f, i) => (
           <div key={i} className="flex items-start gap-2 px-3 py-2 text-xs">
             <Badge variant={sev[f.severity]}>{f.severity}</Badge>
@@ -360,7 +370,7 @@ function ValidationView({ run }: { run: Run }) {
   return (
     <div className="space-y-4 p-5">
       <p className="text-sm text-muted-foreground">Commands run by the orchestrator in the worktree (no agent, no tokens). The first failure stops the run and is sent back to the developer.</p>
-      <div className="divide-y rounded-lg border">
+      <div className="metal-surface divide-y overflow-hidden rounded-xl">
         {results.map((r, i) => {
           const ok = r.exitCode === 0 && !r.timedOut;
           return (
@@ -370,7 +380,7 @@ function ValidationView({ run }: { run: Run }) {
                 <span className="min-w-0 flex-1 truncate font-mono">{r.command}</span>
                 <span className="text-muted-foreground">{(r.durationMs / 1000).toFixed(1)}s</span>
               </summary>
-              <pre className="max-h-80 overflow-auto bg-muted px-3 py-2 text-[11px]">{r.output || '(no output)'}</pre>
+              <pre className="metal-inset max-h-80 overflow-auto rounded-none border-x-0 px-3 py-2 text-[11px]">{r.output || '(no output)'}</pre>
             </details>
           );
         })}
@@ -407,7 +417,7 @@ function TestsView({ report, run }: { report: Report | null; run: Run | null }) 
       <section>
         <h3 className="mb-2 text-sm font-semibold">Tests executed</h3>
         {tests.executed.length ? (
-          <ul className="space-y-1">{tests.executed.map((t) => <li key={t} className="rounded bg-muted px-2 py-1 font-mono text-xs">{t}</li>)}</ul>
+          <ul className="space-y-1">{tests.executed.map((t) => <li key={t} className="metal-inset rounded-lg px-2 py-1 font-mono text-xs">{t}</li>)}</ul>
         ) : (
           <p className="text-xs text-muted-foreground">None reported.</p>
         )}
@@ -423,13 +433,13 @@ function TestsView({ report, run }: { report: Report | null; run: Run | null }) 
       {tests.output && (
         <section>
           <h3 className="mb-2 text-sm font-semibold">Test output</h3>
-          <pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{tests.output}</pre>
+          <pre className="max-h-80 overflow-auto rounded-xl metal-inset p-3 text-xs">{tests.output}</pre>
         </section>
       )}
       {build.output && (
         <section>
           <h3 className="mb-2 text-sm font-semibold">Build output</h3>
-          <pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{build.output}</pre>
+          <pre className="max-h-80 overflow-auto rounded-xl metal-inset p-3 text-xs">{build.output}</pre>
         </section>
       )}
     </div>
@@ -536,7 +546,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
   return (
     <Dialog open={!!featureId} onOpenChange={(o) => !o && onClose()}>
       <SheetContent aria-describedby={undefined}>
-        <div className="border-b p-5 pr-12">
+        <div className="border-b border-foreground/10 p-5 pr-12">
           <div className="flex items-center gap-2">
             <PriorityBadge priority={feature.priority} />
             <AgentStatusBadge status={run?.status ?? feature.agentStatus} />
@@ -544,7 +554,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
             <Badge variant="outline" className="capitalize">{feature.status}</Badge>
             {run && <span className="text-xs text-muted-foreground">{runLabel(run)} · {roleLabel(run.role)}</span>}
           </div>
-          <DialogPrimitive.Title className="mt-2 text-lg font-semibold leading-tight">{feature.title}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="mt-2.5 text-xl font-semibold leading-tight tracking-tight">{feature.title}</DialogPrimitive.Title>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => onEdit(feature)}>
               <Pencil /> Edit
@@ -560,7 +570,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               </Button>
             )}
             {isPaused(feature) && (
-              <Button size="sm" onClick={() => act(() => api.continuePipeline(feature.id), 'Pipeline continued')} title="The last step finished but the next one did not start">
+              <Button size="sm" variant="gold" onClick={() => act(() => api.continuePipeline(feature.id), 'Pipeline continued')} title="The last step finished but the next one did not start">
                 <Play /> Continue pipeline
               </Button>
             )}
@@ -570,7 +580,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               </Button>
             )}
             {feature.prUrl ? (
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="chrome" asChild>
                 <a href={feature.prUrl} target="_blank" rel="noreferrer">
                   <GitPullRequest /> PR #{feature.prNumber}
                 </a>
@@ -580,7 +590,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               !isActive(feature.agentStatus) && (
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="chrome"
                   disabled={creatingPr || !githubConfigured}
                   onClick={createPr}
                   title={githubConfigured ? 'Push the branch and open a pull request (never merges)' : 'Add a GitHub token in Settings first'}
@@ -594,12 +604,12 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                 <ExternalLink /> Open in editor
               </Button>
             )}
-            <Button size="sm" variant="ghost" className="text-red-600" onClick={doDelete}>
+            <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400" onClick={doDelete}>
               <Trash2 /> Delete
             </Button>
             {runs.length > 1 && (
               <select
-                className="ml-auto h-8 rounded-md border bg-background px-2 text-xs"
+                className="metal-raised ml-auto h-8 cursor-pointer rounded-lg px-2 text-xs [&>option]:bg-background"
                 value={runId ?? ''}
                 onChange={(e) => setSelectedRunId(e.target.value)}
               >
@@ -616,8 +626,8 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
         {feature.gate && <GatePanel feature={feature} runs={runs} onShowDiff={() => setTab('changes')} onDone={() => setSelectedRunId(null)} />}
 
         <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b px-5 py-2">
-            <TabsList>
+          <div className="px-5 pt-3">
+            <TabsList className="flex w-full overflow-x-auto">
               <TabsTrigger value="overview"><LayoutDashboard className="h-3.5 w-3.5" /> Overview</TabsTrigger>
               <TabsTrigger value="pipeline"><Workflow className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
               <TabsTrigger value="activity"><Activity className="h-3.5 w-3.5" /> Activity</TabsTrigger>
@@ -648,7 +658,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               {report?.self.plan && !feature.gate && (
                 <section>
                   <h3 className="mb-2 text-sm font-semibold">Implementation plan</h3>
-                  <div className="prose-report max-h-96 overflow-y-auto rounded-md border p-4 text-sm">
+                  <div className="prose-report metal-surface max-h-96 overflow-y-auto rounded-xl p-4 text-sm">
                     <Markdown>{report.self.plan}</Markdown>
                   </div>
                 </section>
@@ -698,12 +708,12 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                   <h3 className="mb-2 text-sm font-semibold">
                     {run.kind === 'followup' ? 'Follow-up request' : run.kind === 'answer' ? 'Your answers' : run.kind === 'fix' ? 'What to fix' : 'Your comments'}
                   </h3>
-                  <pre className="whitespace-pre-wrap rounded-md bg-muted/60 p-3 font-sans text-sm">{run.message}</pre>
+                  <pre className="whitespace-pre-wrap rounded-xl metal-inset p-3 font-sans text-sm">{run.message}</pre>
                 </section>
               )}
               <section>
                 <h3 className="mb-2 text-sm font-semibold">Description</h3>
-                <pre className="whitespace-pre-wrap rounded-md bg-muted/60 p-3 font-sans text-sm">{feature.description || <span className="text-muted-foreground">No description.</span>}</pre>
+                <pre className="whitespace-pre-wrap rounded-xl metal-inset p-3 font-sans text-sm">{feature.description || <span className="text-muted-foreground">No description.</span>}</pre>
               </section>
               <section className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
                 <div><span className="text-muted-foreground">Branch: </span><span className="font-mono">{feature.branch ?? '—'}</span></div>

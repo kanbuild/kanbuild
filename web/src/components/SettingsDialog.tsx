@@ -149,7 +149,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Field label="Claude Code binary">
             <Input value={claudeBinary} onChange={(e) => setClaudeBinary(e.target.value)} className="font-mono text-xs" />
           </Field>
-          <fieldset className="space-y-2 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-2 rounded-xl p-3">
             <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold">
               <Bell className="h-3.5 w-3.5" /> Notifications
             </legend>
@@ -182,7 +182,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             )}
             <p className="text-[11px] text-muted-foreground">Shown as a desktop notification when this tab is in the background, otherwise as a toast.</p>
           </fieldset>
-          <fieldset className="space-y-2 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-2 rounded-xl p-3">
             <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold">
               <Github className="h-3.5 w-3.5" /> GitHub
             </legend>

@@ -1,6 +1,6 @@
 # Web dashboard (`web/`)
 
-Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`, `api.ts`, `hooks.ts`, `lib/utils.ts`, `index.css`, `components/*.tsx`, `components/ui/*.tsx`, `vite.config.ts`, `tailwind.config.js`, `postcss.config.js`, `index.html`
+Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`, `theme.ts`, `api.ts`, `hooks.ts`, `lib/utils.ts`, `index.css`, `components/*.tsx`, `components/ui/*.tsx`, `vite.config.ts`, `tailwind.config.js`, `postcss.config.js`, `index.html`
 
 ## Stack
 
@@ -13,6 +13,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 | Icons | `lucide-react` |
 | Drag and drop | `@dnd-kit` (core, sortable, utilities) |
 | Markdown | `react-markdown` + `remark-gfm` |
+| Font | `@fontsource-variable/inter` (bundled, no CDN, so the Mac app works offline) |
 
 - **No router** and no state library: a custom store built on `useSyncExternalStore`.
 - **Aliases:** `@` → `web/src`, `@shared` → `../shared`. Shared types are imported as `@shared/types.ts`.
@@ -22,9 +23,17 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 
 ## Bootstrap (`main.tsx`)
 
-1. Adds the `dark` class to `<html>` if `prefers-color-scheme: dark`. This is checked once; there is no toggle.
+1. Imports the Inter font and calls `applyTheme()` (`theme.ts`), which sets the `dark` class on `<html>`.
 2. Calls `connect()` to open the WebSocket before render.
 3. Renders `<StrictMode><ErrorBoundary><App/></ErrorBoundary></StrictMode>`.
+
+## Theme (`theme.ts`)
+
+- `Theme = 'system' | 'light' | 'dark'`, stored in localStorage `orch:theme` (absent = `system`). Every access is in try/catch.
+- `applyTheme()` paints once at startup and listens to `prefers-color-scheme` changes; it only repaints from the OS while in `system` mode.
+- `setTheme(t)` stores, repaints and notifies; `useTheme()` is a `useSyncExternalStore` hook over its own tiny module store (not the main store).
+- The toggle is `ThemeToggle` in `App.tsx`: a segmented Monitor / Sun / Moon control in the sidebar footer.
+- `index.html` declares `<meta name="color-scheme" content="light dark">`; `index.css` sets `color-scheme` per theme so native controls match.
 
 ## Store (`store.ts`)
 
@@ -35,7 +44,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 
 **Mechanics**
 - `set(patch)` replaces the state immutably and calls the listeners.
-- `useStore(selector)` wraps `useSyncExternalStore`. **Selectors must return stable references.** Use module-level constants like `NO_TOOLS = []` (ProjectDialog.tsx:13) and `useMemo` over stable slices (Board.tsx:122).
+- `useStore(selector)` wraps `useSyncExternalStore`. **Selectors must return stable references.** Use module-level constants like `NO_TOOLS = []` (ProjectDialog.tsx:13) and `useMemo` over stable slices (Board.tsx:132).
 - `getState()` gives non-React access.
 
 **Actions**
@@ -74,19 +83,21 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 
 ### `App.tsx`
 
-**Sidebar** (`w-64`)
-- Connection status: "local backend connected" or "reconnecting…".
-- Project list:
-  - An amber "N waiting" pill (from `needsAttention`).
-  - A sky pill for the active count.
+The root has the `app-backdrop` (CSS "clouds").
+
+**Sidebar** (`w-64`, a floating `metal-glass` panel)
+- Brand: a chrome logo tile, "AI Orchestrator" in `chrome-text`, and a connection dot: "local backend connected" or "reconnecting…".
+- Project list (the active row is a `metal-raised` pill):
+  - A gold `metal-gold` "N waiting" pill (from `needsAttention`).
+  - A cyan dot chip for the active count.
   - A trash button on hover that removes the project from the dashboard only.
-- Settings button.
+- Footer: the Settings button and `ThemeToggle`.
 
 **Main area**
-- An **out-of-sync banner** when `settings.apiVersion !== API_VERSION`, suggesting a rebuild via `npm start`.
-- Project header: name, path, base branch, est. project cost; "Project settings" and "New feature" buttons.
+- An **out-of-sync banner** (gold bar) when `settings.apiVersion !== API_VERSION`, suggesting a rebuild via `npm start`.
+- **Top bar** (Emergent-style): an accent "Board" pill tab, a chip tab with the project name, then the path and base branch in muted mono. On the right: a gold "est. ~$" cost pill, a `chrome` "Project settings" button and an accent "New feature" button.
 - The `Board`.
-- An empty state when there is no project.
+- **No-project hero:** a "Local-first" pill, the `chrome-text` headline "What will you build today?", a card with "Register your first project" and **Add project**, and three step chips (register → add feature → drag to Build).
 
 **Root-level mounts:** ProjectDialog, FeatureDialog, SettingsDialog, AgentDetailSheet, `ConfirmHost`, `Toaster`.
 
@@ -98,8 +109,10 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 
 ### `Board.tsx`
 
-**Columns:**
-- **Backlog**: "Drag a card into Build to start an agent". It has the only + button.
+**Empty project:** once the project's features are loaded (`loadedProjects`) and there are none, the board is replaced by a hero: "What should the agents build next?" plus a `FeatureComposer hero`.
+
+**Columns** (translucent `metal-glass` trays; a drop target gets `shadow-glow`):
+- **Backlog**: "Drag a card into Build to start an agent". It has the only + button, and a compact `FeatureComposer` ("Quick add a feature…") at the top that expands on focus.
 - **Build**: "X running · Y queued · limit N concurrent (global)".
 - **Done**.
 
@@ -108,23 +121,32 @@ Cards are sorted by `position`, then `createdAt`.
 **Drag and drop**
 - Cards are dragged optimistically through local `cols`, which re-sync from the server only when no drag is active.
 - Sensors: Pointer (6 px activation distance, so a click still opens the card) and Keyboard.
-- `columnFirstCollision` (40-52) gives the column under the pointer priority over cards.
+- `columnFirstCollision` (46-58) gives the column under the pointer priority over cards.
 - `onDragEnd`:
   1. Leaving Build with an active agent → destructive confirm, then `confirmCancel:true`.
   2. Done → Build → confirm "Start a new agent run?".
   3. `api.updateFeature({status})`, then `api.reorder`.
   4. On an error or a declined confirm, reset to the server columns.
 
+### `FeatureComposer.tsx`
+
+Emergent's prompt composer, used to quick-add a backlog feature.
+- Priority "folder tabs" (Low / Normal / High) sit on top of a `metal-surface` card holding a title input (`aria-label="Feature title"`) and a `MentionTextarea` description. The compact version only shows the title until focused.
+- **Cmd/Ctrl+Enter** or the round accent arrow calls `api.createFeature(projectId, {title, description, priority})`, the same call as `FeatureDialog`. Errors go to `toastError`.
+- "More options" opens the full `FeatureDialog` (dependencies…).
+- `hero` adds suggestion `Chip`s ("Add tests for", "Fix bug", "Refactor", "Update docs for") that prefill the title.
+
 ### `FeatureCard.tsx` + `status.tsx`
 
-**Card appearance**
-- Border: red on failure, amber ring when waiting (gate or paused), dashed for a blocked backlog card.
+**Card appearance** (`metal-surface` + `sheen` hover sweep, slight hover lift)
+- Red hairline on failure, gold glow (`shadow-gold-glow`) when waiting (gate or paused), an animated accent line on top while running (`running-edge`), dashed for a blocked backlog card.
+- The PR link is a green pill.
 - Shows: status badge, `PipelineChip`, `runLabel · #attempt`, `RunProgress`, current activity, error, duration, tokens, cost, branch.
 - PR link: its pointerdown is stopped so it doesn't start a drag.
 
 **`status.tsx` helpers**
 - `isActive`, `isPaused` (build + completed + no gate → needs "Continue"), `isWaiting`, `needsAttention` (waiting, or Build + failed).
-- `STATUS_META`, `GATE_META`.
+- `STATUS_META`, `GATE_META`. Gate and Paused chips use the `gold` badge; `PriorityBadge` and the step chip use dotted badges.
 - `runLabel` by kind, `roleLabel`.
 - `RunProgress`: indeterminate when running without a reported progress.
 - `newTokens` (excludes cache reads), `runCost` (estimated ?? reported).
@@ -158,10 +180,10 @@ Cards are sorted by `position`, then `createdAt`.
 - Runs come from `api.runs` and are patched live via `onRunUpdate`.
 - The selected run defaults to `feature.currentRunId`.
 - The report is fetched only once the run is no longer active.
-- The early `return null` (around line 485) comes **after all hooks**.
+- The early `return null` (around line 495) comes **after all hooks**.
 
 **Header actions**
-- Edit, Cancel agent, Retry `<step>`, Continue pipeline (when paused), Stop pipeline (when gated).
+- Edit, Cancel agent, Retry `<step>`, Continue pipeline (when paused, a `gold` button), Stop pipeline (when gated).
 - PR #N link, or Create PR (needs a GitHub token).
 - Open in editor, Delete.
 - A run selector when there is more than one run.
@@ -183,7 +205,8 @@ Cards are sorted by `position`, then `createdAt`.
    - Clicking a run selects it (validator → Tests tab, otherwise Report).
 3. **Activity**
    - `api.events` backfill plus live `onRunEvent` events, deduped by id.
-   - Filters: all, tools, problems.
+   - Filters: all, tools, problems (`Chip`s).
+   - Rows are Emergent-style tool-call rows: `tool_use`/`tool_result` rows are raised metal pills (a result gets a green check), errors and warnings are tinted.
    - Auto-scroll; click a row to expand its detail.
 4. **Changes**
    - `api.changes`: branch, base, commits, files, and a docs badge (`isDocPath`: `docs/`, `agent-docs/`, `CLAUDE*.md`, `README*.md`).
@@ -195,6 +218,8 @@ Cards are sorted by `position`, then `createdAt`.
 6. **Report**: `report.markdown` rendered with `Markdown` in `.prose-report`.
 
 ### `GatePanel.tsx`
+
+Rendered as an Emergent "agent has questions" card: a gold-glow `metal-surface` with a gold header strip ("The agent is waiting for you · Checkpoint"). Approve actions are accent buttons; request-changes actions are `chrome`.
 
 | Gate | UI |
 |---|---|
@@ -255,25 +280,48 @@ Cards are sorted by `position`, then `createdAt`.
 
 | File | Contents |
 |---|---|
-| `button.tsx` | variants default, destructive, outline, secondary, ghost, link; sizes default, sm, lg, icon; `asChild` |
-| `badge.tsx` | variants default, secondary, outline, red, amber, green, blue, violet, gray (with dark variants) |
-| `dialog.tsx` | `DialogContent` (centered, max-w-lg, scrolls), `SheetContent` (right side, `sm:max-w-3xl`), header, footer, title, description |
-| `tabs.tsx` | Radix tabs |
-| `input.tsx` | `Input`, `Textarea`, native `Select`, `Label`, `Field({label, hint})` |
-| `progress.tsx` | `Progress({value|null, tone})`; `null` is indeterminate (`animate-indeterminate` keyframe) |
+| `button.tsx` | variants default (`metal-accent`), destructive (`metal-danger`), outline / secondary (`metal-raised`), `chrome` (graphite pill), `gold` (attention CTA), ghost, link; sizes default, sm, lg, icon, `pill`, `icon-round`; `asChild` |
+| `badge.tsx` | rounded-full pills: default, secondary, outline, red, amber, green, blue, violet, `gold`, gray (with dark variants); `dot` adds a leading status dot |
+| `chip.tsx` | `Chip({active, dot, icon})`: rounded-full `metal-raised` button for suggestions, filters and step chips |
+| `dialog.tsx` | `DialogContent` (centered, max-w-lg, `metal-surface rounded-2xl`, blurred overlay), `SheetContent` (right side, `sm:max-w-3xl`), round chrome close button, header, footer, title, description |
+| `tabs.tsx` | Radix tabs styled as folder tabs: a hairline baseline, the active tab is a raised metal tab |
+| `input.tsx` | `Input`, `Textarea` (`metal-inset` wells, accent focus ring), native `Select` (`metal-raised`), `Label`, `Field({label, hint})` |
+| `progress.tsx` | `Progress({value|null, tone})` with a `metal-inset` track and a glossy gradient bar; `null` is indeterminate (`animate-indeterminate` keyframe) |
 
 ## Styling conventions
 
+**Look: Emergent-inspired metallic.** The reference is Emergent ("Build apps with AI") on Mobbin: atmospheric backgrounds (charcoal smoke in dark, sky in light), brushed-metal cards with an inset top highlight, chrome and graphite buttons, a cyan (dark) / blue (light) accent, gold "credits" pills, folder tabs over a prompt composer, and rounded-full chips.
+
 **Tokens and theming**
-- shadcn "zinc" HSL CSS variables in `index.css` (`:root` and `.dark`), mapped in `tailwind.config.js`.
-- `darkMode: ['class']`, `--radius: 0.6rem`.
+- shadcn-style HSL CSS variables in `index.css` (`:root` = light, `.dark`), mapped in `tailwind.config.js`. `--primary` is blue (light) / cyan (dark). `darkMode: ['class']`, `--radius: 0.75rem`.
+- Extra tokens: `--metal-hi/lo`, `--metal-raised-hi/lo`, `--metal-inset-hi/lo`, `--metal-edge`, `--metal-highlight`, `--metal-shade`, `--sheen`, `--accent-hi/lo/glow`, `--gold(-hi/-lo/-foreground)`, `--chrome-*`, `--chrome-text-*`, `--scrollbar`.
+- Tailwind extras: colors `gold`, `metal` (`border-metal-edge`), shadows `shadow-glow` (accent ring) and `shadow-gold-glow`.
+
+**Metallic utilities** (`@layer components` in `index.css`)
+
+| Class | Use |
+|---|---|
+| `app-backdrop` | Page background: layered radial-gradient clouds. Pure CSS |
+| `metal-surface` | Cards, dialogs, panels: brushed gradient, hairline, inset highlight, soft shadow |
+| `metal-glass` | Translucent, blurred surface (sidebar, board columns) |
+| `metal-raised` | Chrome button / chip body; hover brightens, active presses in |
+| `metal-inset` | Recessed wells: inputs, `<pre>`, stat lists |
+| `metal-accent` | Glossy primary button (blue / cyan) with an accent glow |
+| `metal-gold` | Attention / waiting / cost pills |
+| `metal-chrome` | Graphite pill button |
+| `metal-danger` | Red metallic destructive button |
+| `chrome-text` | Silver-to-accent gradient headline text |
+| `sheen` | Diagonal light sweep on hover (uses `::after`) |
+| `running-edge` | Animated accent line on top of a running card (uses `::before`) |
+
+Animations are disabled under `prefers-reduced-motion`. Scrollbars are thin metallic thumbs. `.prose-report` code blocks use `metal-inset`.
 
 **Status colors**
 
 | Color | Meaning |
 |---|---|
-| amber | waiting or attention |
-| sky | running or info |
+| amber / gold | waiting or attention |
+| sky / cyan (`primary`) | running or info |
 | emerald | success |
 | red | failure |
 | violet | pipeline step, docs, skills |
@@ -287,6 +335,8 @@ Cards are sorted by `position`, then `createdAt`.
 1. **Hooks must run unconditionally.** A conditional `useStore` in App.tsx once blanked the dashboard (fixed in 7ddcbe2, which also added ErrorBoundary).
 2. **Stable selector results only.** A selector that returns a fresh `[]` or `{}` causes a render loop.
 3. **Version banner:** bump `API_VERSION` in `shared/types.ts` for coordinated changes. The server sends `index.html` with no-cache, so a reload picks up a rebuilt dashboard.
-4. **localStorage keys:** `orch:lastProject` and `orch:diffMode`. Every access is wrapped in try/catch.
+4. **localStorage keys:** `orch:lastProject`, `orch:diffMode` and `orch:theme`. Every access is wrapped in try/catch.
 5. **No UI action merges branches.** Create PR pushes the branch and opens a PR.
 6. Costs are always labeled "est.".
+7. **Textareas with `bg-none`** (no metal gradient) also need `bg-transparent`, or the browser's dark form-field color shows through.
+8. `sheen` sets `overflow: hidden`, so don't put popovers inside an element that uses it.

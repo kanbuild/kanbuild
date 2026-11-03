@@ -33,7 +33,11 @@ export function AgentStatusBadge({ status }: { status: AgentStatus | null }) {
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
   const v = priority === 'high' ? 'red' : priority === 'medium' ? 'amber' : 'gray';
-  return <Badge variant={v}>{priority}</Badge>;
+  return (
+    <Badge variant={v} dot className="capitalize">
+      {priority}
+    </Badge>
+  );
 }
 
 /** A step finished in Build but nothing is waiting or running: the pipeline needs "Continue". */
@@ -112,14 +116,14 @@ export function PipelineChip({ feature }: { feature: Feature }) {
     const m = GATE_META[feature.gate.type];
     const Icon = m.icon;
     return (
-      <Badge variant="amber">
+      <Badge variant="gold">
         <Icon className="h-3 w-3" /> {m.label}
       </Badge>
     );
   }
   if (isPaused(feature)) {
     return (
-      <Badge variant="amber" title="The last step finished but the next one did not start. Open the card and click Continue pipeline.">
+      <Badge variant="gold" title="The last step finished but the next one did not start. Open the card and click Continue pipeline.">
         <PauseCircle className="h-3 w-3" /> Paused
       </Badge>
     );
@@ -133,7 +137,11 @@ export function PipelineChip({ feature }: { feature: Feature }) {
     );
   }
   if (run && isActive(feature.agentStatus) && !(run.kind === 'feature' && run.role === 'developer' && run.cycle === 1 && run.attempt === 1)) {
-    return <Badge variant="violet">{runLabel(run)}</Badge>;
+    return (
+      <Badge variant="violet" dot>
+        {runLabel(run)}
+      </Badge>
+    );
   }
   return null;
 }

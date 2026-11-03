@@ -154,7 +154,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'AI Orchestrator',
-    backgroundColor: '#0b0b0f',
+    backgroundColor: '#0b0c0e',
     show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
