@@ -98,6 +98,8 @@ function rowToProject(r: any): Project {
     agentProfile: r.agent_profile ?? '',
     effort: r.effort ?? '',
     mcpConfig: r.mcp_config ?? '',
+    mcpServers: cleanNames(safeJsonArray(r.mcp_servers_json)),
+    skills: cleanNames(safeJsonArray(r.skills_json)),
     pipeline: cleanPipeline(safeJson(r.pipeline_json)),
     roles: cleanRoles(safeJson(r.roles_json)),
     createdAt: r.created_at,
@@ -110,6 +112,20 @@ function safeJson(s: string | null | undefined): unknown {
   } catch {
     return {};
   }
+}
+
+function safeJsonArray(s: string | null | undefined): unknown {
+  try {
+    return s ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Sanitize a list of MCP server names / skill ids: strings, trimmed, deduped, at most 100. */
+export function cleanNames(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return [...new Set(v.map((x) => String(x ?? '').trim()).filter((x) => x && x.length <= 200))].slice(0, 100);
 }
 
 export function listProjects(): Project[] {
@@ -133,6 +149,8 @@ export interface ProjectInput {
   agentProfile?: string;
   effort?: string;
   mcpConfig?: string;
+  mcpServers?: string[];
+  skills?: string[];
   pipeline?: Partial<PipelineConfig>;
   roles?: RolesConfig;
 }
@@ -167,14 +185,16 @@ export async function createProject(input: ProjectInput): Promise<Project> {
     agentProfile: cleanProfile(input.agentProfile, ''),
     effort: cleanEffort(input.effort, ''),
     mcpConfig: input.mcpConfig ?? '',
+    mcpServers: cleanNames(input.mcpServers),
+    skills: cleanNames(input.skills),
     pipeline: cleanPipeline(input.pipeline),
     roles: cleanRoles(input.roles),
     createdAt: now(),
   };
   getDb()
     .prepare(
-      `INSERT INTO projects (id, name, description, path, base_branch, worktree_root, allowed_tools, model, agent_profile, effort, mcp_config, pipeline_json, roles_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projects (id, name, description, path, base_branch, worktree_root, allowed_tools, model, agent_profile, effort, mcp_config, mcp_servers_json, skills_json, pipeline_json, roles_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       project.id,
@@ -188,6 +208,8 @@ export async function createProject(input: ProjectInput): Promise<Project> {
       project.agentProfile,
       project.effort,
       project.mcpConfig,
+      JSON.stringify(project.mcpServers),
+      JSON.stringify(project.skills),
       JSON.stringify(project.pipeline),
       JSON.stringify(project.roles),
       project.createdAt,
@@ -216,12 +238,14 @@ export async function updateProject(id: string, input: ProjectInput): Promise<Pr
     agentProfile: cleanProfile(input.agentProfile, p.agentProfile),
     effort: cleanEffort(input.effort, p.effort),
     mcpConfig: input.mcpConfig ?? p.mcpConfig,
+    mcpServers: input.mcpServers !== undefined ? cleanNames(input.mcpServers) : p.mcpServers,
+    skills: input.skills !== undefined ? cleanNames(input.skills) : p.skills,
     pipeline: input.pipeline ? cleanPipeline(input.pipeline, p.pipeline) : p.pipeline,
     roles: input.roles ? cleanRoles(input.roles, p.roles) : p.roles,
   };
   getDb()
     .prepare(
-      'UPDATE projects SET name=?, description=?, base_branch=?, worktree_root=?, allowed_tools=?, model=?, agent_profile=?, effort=?, mcp_config=?, pipeline_json=?, roles_json=? WHERE id=?',
+      'UPDATE projects SET name=?, description=?, base_branch=?, worktree_root=?, allowed_tools=?, model=?, agent_profile=?, effort=?, mcp_config=?, mcp_servers_json=?, skills_json=?, pipeline_json=?, roles_json=? WHERE id=?',
     )
     .run(
       next.name,
@@ -233,6 +257,8 @@ export async function updateProject(id: string, input: ProjectInput): Promise<Pr
       next.agentProfile,
       next.effort,
       next.mcpConfig,
+      JSON.stringify(next.mcpServers),
+      JSON.stringify(next.skills),
       JSON.stringify(next.pipeline),
       JSON.stringify(next.roles),
       id,

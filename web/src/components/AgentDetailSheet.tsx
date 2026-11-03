@@ -42,6 +42,7 @@ import { DiffViewer } from './DiffViewer';
 import { GatePanel } from './GatePanel';
 import { PipelineTab } from './PipelineTab';
 import { Textarea } from './ui/input';
+import { MentionTextarea } from './MentionTextarea';
 import { confirm } from './confirm';
 import { toast, toastError } from './toast';
 
@@ -181,11 +182,12 @@ function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: ()
         <MessageSquarePlus className="h-4 w-4" /> Continue this session
       </h3>
       <div className="space-y-2">
-        <Textarea
+        <MentionTextarea
+          projectId={feature.projectId}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={setMessage}
           rows={3}
-          placeholder="Ask the agent for more work, e.g. “Also handle the empty state and add a test for it.”"
+          placeholder="Ask the agent for more work, e.g. “Also handle the empty state and add a test for it.” Type @ to reference a file."
           disabled={busy || !info?.worktreeExists}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && message.trim()) send();

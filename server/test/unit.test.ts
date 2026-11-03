@@ -93,7 +93,7 @@ import type { Feature, Project, Settings } from '../../shared/types.ts';
 
 const project: Project = {
   id: 'prj_1', name: 'Tiles', description: '', path: '/r', baseBranch: 'main', worktreeRoot: '/r-wt',
-  allowedTools: ['Read', 'Bash(npm:*)', 'Bash(git commit:*)'], model: '', agentProfile: '', effort: '', mcpConfig: '',
+  allowedTools: ['Read', 'Bash(npm:*)', 'Bash(git commit:*)'], model: '', agentProfile: '', effort: '', mcpConfig: '', mcpServers: [], skills: [],
   pipeline: DEFAULT_PIPELINE, roles: {}, createdAt: '',
 };
 const settings: Settings = {

@@ -1,3 +1,4 @@
+import type { Capabilities } from './capabilities.ts';
 import type { AgentProfile, AgentRole, Effort, Project, Settings } from '../../shared/types.ts';
 
 /**
@@ -42,6 +43,8 @@ export interface LaunchConfig {
   /** Planner/reviewer: no file edits. */
   readOnly: boolean;
   role: AgentRole;
+  /** Selected MCP servers / skills, resolved by prepareCapabilities(). Null = profile default. */
+  capabilities: Capabilities | null;
 }
 
 /** Merge global settings with project overrides. Empty project values mean "inherit". */
@@ -59,6 +62,7 @@ export function resolveLaunchConfig(project: Project, settings: Settings, role: 
     allowedTools: readOnly ? READ_ONLY_ALLOWED : project.allowedTools,
     readOnly,
     role,
+    capabilities: null,
   };
 }
 
@@ -69,26 +73,42 @@ export function resolveLaunchConfig(project: Project, settings: Settings, role: 
  * `--permission-mode acceptEdits` and the project's tool allowlist. The lean profile additionally:
  *  - ignores user-level MCP servers (`--strict-mcp-config`, optionally loading the project's own MCP config),
  *  - limits the built-in tools (`--tools`),
- *  - disables skills and slash commands (`--disable-slash-commands`),
+ *  - disables skills and slash commands (`--disable-slash-commands`) unless skills were selected,
  *  - loads only project/local settings (`--setting-sources project,local`): the repository's CLAUDE.md
  *    and .claude/settings.json still apply; user-level plugins, hooks, agents and ~/.claude/CLAUDE.md do not.
+ *
+ * MCP servers / skills selected in the project (cfg.capabilities) apply to both profiles: only the
+ * selected servers are loaded (generated --mcp-config + --strict-mcp-config) and allowed, and the
+ * selected skills are allowed (lean: shipped through a session-only --plugin-dir).
  */
 export function buildClaudeArgs(prompt: string, cfg: LaunchConfig, opts: { resumeSessionId?: string | null } = {}): string[] {
+  const caps = cfg.capabilities;
+  const skills = caps?.skillNames ?? [];
+  /** MCP servers were selected: only those may be used, in either profile. */
+  const restrictMcp = !!caps && caps.allowMcp.length > 0;
+  const allowed = [...cfg.allowedTools, ...(restrictMcp ? caps!.allowMcp : []), ...skills.map((n) => `Skill(${n})`)];
+  const disallowed = [...(cfg.readOnly ? DISALLOWED_FOR_READ_ONLY : []), ...(restrictMcp && !caps!.strictMcp ? caps!.disallowMcp : [])];
   // Read-only roles run in the default permission mode: anything outside the read-only allowlist is denied.
   const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--permission-mode', cfg.readOnly ? 'default' : 'acceptEdits'];
   if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId);
-  if (cfg.allowedTools.length) args.push('--allowedTools', cfg.allowedTools.join(','));
-  if (cfg.readOnly) args.push('--disallowedTools', DISALLOWED_FOR_READ_ONLY.join(','));
+  if (allowed.length) args.push('--allowedTools', allowed.join(','));
+  if (disallowed.length) args.push('--disallowedTools', disallowed.join(','));
   if (cfg.model) args.push('--model', cfg.model);
   if (cfg.effort) args.push('--effort', cfg.effort);
   if (cfg.maxBudgetUsd) args.push('--max-budget-usd', String(cfg.maxBudgetUsd));
+  // claude.ai connectors cannot be exported to a config file, so selecting one drops --strict-mcp-config
+  // (the unselected servers are denied through --disallowedTools instead).
+  const strictMcp = restrictMcp ? caps!.strictMcp : cfg.profile === 'lean';
   if (cfg.profile === 'lean') {
-    args.push('--tools', (cfg.readOnly ? READ_ONLY_TOOLS : LEAN_TOOLS).join(','));
-    args.push('--disable-slash-commands');
+    const tools = cfg.readOnly ? READ_ONLY_TOOLS : LEAN_TOOLS;
+    args.push('--tools', (skills.length ? [...tools, 'Skill'] : tools).join(','));
+    if (!skills.length) args.push('--disable-slash-commands');
     args.push('--setting-sources', 'project,local');
-    args.push('--strict-mcp-config');
   }
-  if (cfg.mcpConfig) args.push('--mcp-config', cfg.mcpConfig);
+  if (strictMcp) args.push('--strict-mcp-config');
+  const mcpConfigs = [caps?.mcpConfigPath, cfg.mcpConfig].filter((x): x is string => !!x);
+  for (const c of mcpConfigs) args.push('--mcp-config', c);
+  if (caps?.skillPluginDir) args.push('--plugin-dir', caps.skillPluginDir);
   return args;
 }
 

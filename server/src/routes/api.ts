@@ -11,7 +11,7 @@ import {
   setDependencies,
   updateFeatureFields,
 } from '../features.ts';
-import { collectChanges, getDiff, isWorktreeDirty, removeWorktree, validateRepoPath, type DiffScope } from '../git.ts';
+import { collectChanges, expandHome, getDiff, isWorktreeDirty, removeWorktree, validateRepoPath, type DiffScope } from '../git.ts';
 import { GithubError, githubStatus, setToken, verifyToken } from '../github.ts';
 import { notify } from '../notify.ts';
 import { createPrForFeature } from '../pr.ts';
@@ -21,6 +21,11 @@ import { DEFAULT_ALLOWED_TOOLS, HttpError, createProject, deleteProject, getProj
 import { getReport, getRun, listEvents, listRunsForFeature, publicRun } from '../runs.ts';
 import { getSettings, updateSettings } from '../settings.ts';
 import { EDITOR_PRESETS, EditorError, launch, openTerminalCommand, resolveEditorCommand, revealCommand } from '../editor.ts';
+import { getCatalog } from '../catalog.ts';
+import { prepareCapabilities } from '../capabilities.ts';
+import { listRepoFiles, rankFiles } from '../files.ts';
+import { RUNS_DIR } from '../db.ts';
+import path from 'node:path';
 import { buildClaudeArgs, previewCommand, resolveLaunchConfig, resumeCommand } from '../launch.ts';
 import { buildPlanPrompt, buildPrompt, buildReviewerPrompt, buildTesterPrompt } from '../prompt.ts';
 import { ACTIVE_AGENT_STATUSES, API_VERSION, CLAUDE_ROLES, type Feature, type FeatureStatus } from '../../../shared/types.ts';
@@ -78,6 +83,14 @@ api.put('/settings', h((req) => {
   return s;
 }));
 
+// ---- Claude Code catalog (MCP servers and skills) ----
+api.post('/catalog', h(async (req) => {
+  const v = await validateRepoPath(String(req.body?.path ?? ''));
+  if (!v.isGitRepo) throw new HttpError(400, v.error || 'Not a git repository');
+  const repo = path.resolve(expandHome(String(req.body.path).trim()));
+  return getCatalog(repo, getSettings().claudeBinary, { refresh: req.body?.refresh === true });
+}));
+
 // ---- Projects ----
 api.get('/projects', h(() => listProjects()));
 api.post('/projects/validate', h((req) => validateRepoPath(String(req.body?.path ?? ''))));
@@ -98,6 +111,7 @@ api.get('/projects/:id/launch-preview', h((req) => {
   const roles = Object.fromEntries(
     CLAUDE_ROLES.map((role) => {
       const cfg = resolveLaunchConfig(project, settings, role);
+      cfg.capabilities = prepareCapabilities(project, cfg.profile, { dir: path.join(RUNS_DIR, '<run>', 'capabilities'), write: false });
       const prompt =
         role === 'planner' ? buildPlanPrompt(sampleFeature, project, branch, cfg)
           : role === 'tester' ? buildTesterPrompt(sampleFeature, project, branch, project.baseBranch, cfg)
@@ -108,6 +122,12 @@ api.get('/projects/:id/launch-preview', h((req) => {
   );
   const dev = roles.developer;
   return { config: dev.config, command: dev.command, prompt: dev.prompt, roles };
+}));
+/** Repository files matching `q` (for @-references in descriptions). */
+api.get('/projects/:id/files', h(async (req) => {
+  const project = getProject(req.params.id);
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 30));
+  return rankFiles(await listRepoFiles(project.path), String(req.query.q ?? ''), limit);
 }));
 /** Validation commands that would run if none are configured (detected from the main checkout). */
 api.get('/projects/:id/validation-preview', h((req) => detectValidationCommands(getProject(req.params.id).path)));

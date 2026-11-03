@@ -1,4 +1,6 @@
 import type { AgentRole, Feature, FixReason, Project, ReviewFinding, ValidationResult } from '../../shared/types.ts';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { LaunchConfig } from './launch.ts';
 
 /** Machine-readable markers at the top of every prompt (also used by the test double). */
@@ -55,14 +57,35 @@ export function allowedBashCommands(allowedTools: string[]): string[] {
     .filter((x): x is string => !!x);
 }
 
-function featureSection(feature: Feature): string {
+/** `@path/to/file` references in free text (deduped, trailing punctuation stripped, in order). */
+export function extractFileRefs(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/(?:^|[\s(\[])@([^\s@`'"()\[\]<>]+)/g)) {
+    const ref = m[1].replace(/[.,;:!?]+$/, '');
+    if (ref && !ref.includes('..') && !path.isAbsolute(ref) && !out.includes(ref)) out.push(ref);
+  }
+  return out.slice(0, 50);
+}
+
+/** "Referenced files" block for prompts; paths are checked against `repoPath` when given. */
+export function referencedFilesSection(text: string, repoPath?: string): string {
+  const refs = extractFileRefs(text);
+  if (!refs.length) return '';
+  const lines = refs.map((r) => {
+    const missing = repoPath && !fs.existsSync(path.join(repoPath, r));
+    return `- \`${r}\`${missing ? ' (not found in the base checkout — it may not exist yet)' : ''}`;
+  });
+  return `\n**Referenced files** (the user pointed at these with @; read them before planning or changing code):\n${lines.join('\n')}\n`;
+}
+
+function featureSection(feature: Feature, project?: Project): string {
   return `# Feature
 **Title:** ${feature.title}
 **Priority:** ${feature.priority}
 
 **Requirements:**
 ${feature.description.trim() || '(no further description provided — infer the intended behaviour from the title and the project documentation)'}
-`;
+${referencedFilesSection(feature.description, project?.path)}`;
 }
 
 const CONTEXT_SECTION = `# Project context and documentation
@@ -134,7 +157,7 @@ export function buildPrompt(feature: Feature, project: Project, branch: string, 
 You are an autonomous coding agent implementing one feature for the "${project.name}" project.
 You are working inside a dedicated git worktree on branch \`${branch}\` (created from \`${baseRef || project.baseBranch}\`).
 ${attempt > 1 ? `\nThis is attempt #${attempt}. A previous attempt may have left work in this worktree — check \`git status\` and \`git log\` first and continue from there.\n` : ''}
-${featureSection(feature)}
+${featureSection(feature, project)}
 ${CONTEXT_SECTION}
 ${devRules(project, cfg)}
 ${PROGRESS_SECTION}
@@ -147,7 +170,7 @@ export function buildPlanPrompt(feature: Feature, project: Project, branch: stri
 You are the planning agent for one feature of the "${project.name}" project.
 You are inside a dedicated git worktree on branch \`${branch}\` (created from \`${baseRef || project.baseBranch}\`). Another step will implement your plan in this same session after the user approves it.
 
-${featureSection(feature)}
+${featureSection(feature, project)}
 ${CONTEXT_SECTION}
 # Your task
 1. Do NOT modify any files. Only read what you need to plan the change.
@@ -222,7 +245,7 @@ export function buildTesterPrompt(feature: Feature, project: Project, branch: st
   return `${roleMarker('tester')}
 You are the testing agent for the "${project.name}" project. Another agent has implemented the feature below on branch \`${branch}\` in this worktree. See what changed with \`git log ${baseRef}..HEAD\` and \`git diff ${baseRef}...HEAD --stat\`, then read only the relevant parts.
 
-${featureSection(feature)}
+${featureSection(feature, project)}
 ${CONTEXT_SECTION}
 # Your task
 1. Check the tests for this feature against its requirements, acceptance criteria and edge cases. Add or extend tests where coverage is missing, following the project's existing test setup and conventions.
@@ -243,7 +266,7 @@ export function buildReviewerPrompt(feature: Feature, project: Project, branch: 
   return `${roleMarker('reviewer')}
 You are the code reviewer for the "${project.name}" project. Review the changes on branch \`${branch}\` in this worktree against its base \`${baseRef}\`. Start with \`git diff ${baseRef}...HEAD --stat\` and \`git log ${baseRef}..HEAD --oneline\`, then read the diff of the relevant files.
 
-${featureSection(feature)}
+${featureSection(feature, project)}
 # What to check
 - The requirements above are fully and correctly implemented.
 - Correctness: edge cases, error handling, data validation, concurrency, security issues.
@@ -282,7 +305,7 @@ export function buildFollowupPrompt(message: string, branch: string): string {
 Follow-up request for this feature (you are still in the same worktree, on branch \`${branch}\`):
 
 ${message.trim()}
-
+${referencedFilesSection(message)}
 Apply the same rules as before: follow the project's CLAUDE.md and documentation, run the relevant tests, commit your changes, print the [[PROGRESS:...]] markers, and finish with one sentence plus the same \`\`\`json report block (describing this follow-up), for example:
 ${DEV_REPORT_SCHEMA}
 `;

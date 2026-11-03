@@ -31,3 +31,13 @@ export function formatDuration(ms: number | null | undefined): string {
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
+
+/** `@path/to/file` references in free text (mirrors server/src/prompt.ts extractFileRefs). */
+export function extractFileRefs(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/(?:^|[\s(\[])@([^\s@`'"()\[\]<>]+)/g)) {
+    const ref = m[1].replace(/[.,;:!?]+$/, '');
+    if (ref && !ref.includes('..') && !ref.startsWith('/') && !out.includes(ref)) out.push(ref);
+  }
+  return out;
+}

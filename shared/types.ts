@@ -4,7 +4,7 @@
  * Bumped whenever the backend and the dashboard must be updated together. The dashboard shows a
  * "rebuild/reload" banner when its compiled value differs from the backend's.
  */
-export const API_VERSION = 5;
+export const API_VERSION = 6;
 
 export type Priority = 'low' | 'medium' | 'high';
 export type FeatureStatus = 'backlog' | 'build' | 'done';
@@ -128,9 +128,42 @@ export interface Project {
   effort: Effort | '';
   /** Optional MCP config (JSON string or file path) passed via --mcp-config. */
   mcpConfig: string;
+  /** MCP servers (names from the catalog) the project's agents may use. Empty = profile default. */
+  mcpServers: string[];
+  /** Skills (catalog ids, `${source}:${name}`) the project's agents may use. Empty = profile default. */
+  skills: string[];
   pipeline: PipelineConfig;
   roles: RolesConfig;
   createdAt: string;
+}
+
+export type McpScope = 'user' | 'local' | 'project' | 'plugin' | 'claude.ai';
+export interface McpServerInfo {
+  name: string;
+  scope: McpScope;
+  transport: 'stdio' | 'http' | 'sse' | 'ws' | 'unknown';
+  /** Command or URL, with secrets redacted. */
+  target: string;
+  status: 'connected' | 'failed' | 'needs_auth' | 'pending' | null;
+  /** False when the server cannot be exported to a generated --mcp-config (claude.ai connectors). */
+  launchable: boolean;
+  plugin?: string;
+}
+export type SkillSource = 'user' | 'project' | 'plugin';
+export interface SkillInfo {
+  /** `${source}:${name}` (plugin skills: `plugin:${plugin}:${name}`). */
+  id: string;
+  name: string;
+  description: string;
+  source: SkillSource;
+  plugin?: string;
+  path: string;
+}
+export interface Catalog {
+  mcpServers: McpServerInfo[];
+  skills: SkillInfo[];
+  fetchedAt: string;
+  warnings: string[];
 }
 
 export interface Usage {

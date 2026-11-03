@@ -117,6 +117,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX feature_dependencies_dep ON feature_dependencies(depends_on_id);
   `,
+  `
+  ALTER TABLE projects ADD COLUMN mcp_servers_json TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE projects ADD COLUMN skills_json TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export function getDb(): DatabaseSync {
