@@ -73,11 +73,19 @@ npm run test -w desktop # unit tests for env.ts
 |---|---|
 | `CSC_LINK` (base64 .p12 of a *Developer ID Application* cert) + `CSC_KEY_PASSWORD` | Signs the app, hardened runtime. `@electron/osx-sign` also signs `Resources/node/bin/node` with `entitlementsInherit` |
 | + `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarizes and staples |
-| none | `identity: null`: an **unsigned** build (a warning is printed). Users right-click → Open the first time |
+| none | `identity: null`: an **unsigned** build (a warning is printed). On macOS 15+ users must try to open it, then System Settings → Privacy & Security → **Open Anyway** (older macOS: right-click → Open) |
 
 `build/entitlements.mac.plist` has `allow-jit` and `allow-unsigned-executable-memory` (V8 in Electron and the bundled Node) and `disable-library-validation` (the backend runs user tools).
 
-**Release:** push a tag `vX.Y.Z`. `.github/workflows/release-mac.yml` (macos-latest) runs typecheck and tests, sets `desktop/package.json` to the tag version, runs `npm run desktop:dist` with the secrets, writes the signed/notarized status to the job summary, and attaches the dmg/zip to a GitHub Release. `workflow_dispatch` builds without publishing (as a workflow artifact). `.github/workflows/ci.yml` runs typecheck, tests and builds on Ubuntu and macOS for pushes to main and for PRs (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`).
+**Release:** push a tag `vX.Y.Z`. `.github/workflows/release-mac.yml` (macos-latest) runs typecheck and tests, sets `desktop/package.json` to the tag version, runs `npm run desktop:dist` with the secrets, writes the signed/notarized status to the job summary, and attaches the dmg/zip to a GitHub Release. `workflow_dispatch` builds without publishing (as a workflow artifact). **First release checklist:**
+
+1. Add the five values above as **repository** secrets (Settings → Secrets and variables → Actions → New repository secret). Environment secrets are not visible, because the workflow declares no `environment:`.
+2. Merge the workflow to `main`. GitHub shows **Run workflow** only for workflows on the default branch.
+3. Go to Actions → **Release macOS app** → **Run workflow** (branch `main`). The job summary should say `Signed: true` and `Notarized: true`. Download the `macos-app` artifact.
+4. Install the dmg and check it with `spctl -a -vv "/Applications/AI Orchestrator.app"`, which should report `source=Notarized Developer ID`.
+5. Publish: `git tag v0.1.0 && git push origin v0.1.0`.
+
+`.github/workflows/ci.yml` runs typecheck, tests and builds on Ubuntu and macOS for pushes to main and for PRs (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`).
 
 ## Gotchas
 
