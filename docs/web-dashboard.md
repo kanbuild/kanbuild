@@ -237,7 +237,12 @@ The compact quick-add at the top of the Backlog column, built on the `Composer` 
    - Header: the worktree path, "N running", Clear (finished sessions).
    - One `metal-surface` block per command: `$ command`, a running badge + Stop, or duration + `exit N` / signal badge; output in a `<pre>` (max-h-96), "earlier output trimmed" when `outputStart > 0`. Auto-scrolls while the user is at the bottom.
    - Current directory: `cd` persists (kept by the server). The prompt shows it before `$` via `displayDir()` (`<worktree-name>`, `<worktree-name>/server`, or an absolute path outside the worktree; `data-testid="terminal-cwd"`), with a ↺ button (`aria-label="Back to worktree root"`) when it isn't the root. `cwd`/`root` come from the backfill and from `terminal.updated` messages whose `endCwd` differs from the start dir. A command block shows its start dir when it isn't the root; a `cd` with no output shows "now in <dir>".
-   - Prompt: `$` input (`aria-label="Terminal command"`); Enter runs; ↑/↓ walk the history in localStorage `orch:termHistory` (50 max). Quick chips: detected validation commands (`api.validationPreview`, minus installs) + `git status`, `git log --oneline -10`.
+   - Prompt: `$` input (`aria-label="Terminal command"`); Enter runs; ↑/↓ walk the history in localStorage `orch:termHistory` (50 max).
+   - **Command shortcuts** (chips above the prompt, `aria-label="Command shortcuts"`): clicking one runs it.
+     - `DEFAULT_PRESETS` = `git status`, always first and not removable.
+     - The user's saved shortcuts live in localStorage `orch:termPresets:<projectId>` (per project, per browser, 30 max, deduped). Each has a × on hover/focus (`Remove shortcut <cmd>`).
+     - The round **+** chip (`Add command shortcut`) enters save mode: the input's placeholder becomes "Save a command" (`aria-label="Command to save"`), the + turns into a **Save** chip (disabled until something is typed) with a cancel ×, and the run ↵ button is hidden. Enter saves. In save mode the input works even while the agent is running.
+     - Esc cancels save mode **without closing the sheet**: a window capture `keydown` listener calls `preventDefault()` before Radix's document listener, which then skips dismissing. React's `stopPropagation` is too late for this.
    - Disabled with a hint when there is no worktree or the agent is active (`isActive(feature.agentStatus)`).
    - Sync: subscribes to `onTerminal` **before** the backfill fetch, and re-fetches whenever `connected` flips (missed WS messages aren't replayed). Chunks merge by `offset` (`applyChunk`), and the backfill merge keeps sessions it doesn't list and never downgrades an exited session to running.
 
@@ -380,7 +385,7 @@ Under `prefers-reduced-motion`, these animations collapse to 1 ms (spinners and 
 1. **Hooks must run unconditionally.** A conditional `useStore` in App.tsx once blanked the dashboard (fixed in 7ddcbe2, which also added ErrorBoundary).
 2. **Stable selector results only.** A selector that returns a fresh `[]` or `{}` causes a render loop.
 3. **Version banner:** bump `API_VERSION` in `shared/types.ts` for coordinated changes. The server sends `index.html` with no-cache, so a reload picks up a rebuilt dashboard.
-4. **localStorage keys:** `orch:lastProject`, `orch:diffMode`, `orch:theme` and `orch:termHistory`. Every access is wrapped in try/catch.
+4. **localStorage keys:** `orch:lastProject`, `orch:diffMode`, `orch:theme`, `orch:termHistory` and `orch:termPresets:<projectId>`. Every access is wrapped in try/catch.
 5. **No UI action merges branches.** Create PR pushes the branch and opens a PR.
 6. Costs are always labeled "est.".
 7. **Textareas with `bg-none`** (no metal gradient) also need `bg-transparent`, or the browser's dark form-field color shows through.

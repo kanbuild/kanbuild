@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CornerDownLeft, FolderOpen, Loader2, RotateCcw, Square, SquareTerminal, Trash2 } from 'lucide-react';
+import { Check, CornerDownLeft, FolderOpen, Loader2, Plus, RotateCcw, Square, SquareTerminal, Trash2, X } from 'lucide-react';
 import type { Feature, TerminalSession } from '@shared/types.ts';
 import { api } from '@/api';
 import { onTerminal, useStore } from '@/store';
@@ -11,7 +11,27 @@ import { toastError } from './toast';
 
 const HISTORY_KEY = 'orch:termHistory';
 const HISTORY_MAX = 50;
-const QUICK_FALLBACK = ['git status', 'git log --oneline -10'];
+/** Built-in shortcut, always shown first and not removable. */
+export const DEFAULT_PRESETS = ['git status'];
+const PRESETS_MAX = 30;
+const presetsKey = (projectId: string) => `orch:termPresets:${projectId}`;
+
+/** The user's saved command shortcuts for a project (localStorage, per browser). */
+export function loadPresets(projectId: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(presetsKey(projectId)) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+function savePresets(projectId: string, list: string[]) {
+  try {
+    localStorage.setItem(presetsKey(projectId), JSON.stringify(list));
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 function loadHistory(): string[] {
   try {
@@ -52,7 +72,9 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
   const [sessions, setSessions] = useState<TerminalSession[]>([]);
   const [command, setCommand] = useState('');
   const [busy, setBusy] = useState(false);
-  const [quick, setQuick] = useState<string[]>(QUICK_FALLBACK);
+  // Saved command shortcuts (chips). `saving` = the input is in "Save a command" mode.
+  const [presets, setPresets] = useState<string[]>(() => loadPresets(feature.projectId));
+  const [saving, setSaving] = useState(false);
   // Where the next command runs (the server keeps it per feature, so `cd` persists).
   const [cwd, setCwd] = useState<string | null>(feature.worktreePath);
   const [root, setRoot] = useState<string | null>(feature.worktreePath);
@@ -118,14 +140,51 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
   }, [feature.id, connected]);
 
   useEffect(() => {
-    api
-      .validationPreview(feature.projectId)
-      .then((r) => {
-        const cmds = r.commands.filter((c) => !/\b(npm ci|install)\b/.test(c));
-        setQuick([...new Set([...cmds, ...QUICK_FALLBACK])].slice(0, 6));
-      })
-      .catch(() => {});
+    setPresets(loadPresets(feature.projectId));
   }, [feature.projectId]);
+
+  const startSaving = () => {
+    setSaving(true);
+    historyIdx.current = null;
+    inputRef.current?.focus();
+  };
+  const cancelSaving = () => {
+    setSaving(false);
+    setCommand('');
+    inputRef.current?.focus();
+  };
+  const savePreset = () => {
+    const c = command.trim();
+    if (!c) return;
+    if (!DEFAULT_PRESETS.includes(c) && !presets.includes(c)) {
+      const next = [...presets, c].slice(-PRESETS_MAX);
+      setPresets(next);
+      savePresets(feature.projectId, next);
+    }
+    setSaving(false);
+    setCommand('');
+    inputRef.current?.focus();
+  };
+  // Esc in save mode cancels it without closing the sheet. Radix's Escape listener sits on
+  // `document` and skips dismissing when the event is already defaultPrevented, so claim the key
+  // in a window capture listener, which runs first. (React's stopPropagation is too late.)
+  useEffect(() => {
+    if (!saving) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.activeElement !== inputRef.current) return;
+      e.preventDefault();
+      setSaving(false);
+      setCommand('');
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [saving]);
+
+  const removePreset = (c: string) => {
+    const next = presets.filter((x) => x !== c);
+    setPresets(next);
+    savePresets(feature.projectId, next);
+  };
 
   // Auto-scroll while the user is at the bottom.
   useEffect(() => {
@@ -186,6 +245,14 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const h = historyRef.current;
+    if (saving) {
+      // Escape is handled by the window listener above (it must run before Radix's).
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        savePreset();
+      }
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       void run(command);
@@ -243,12 +310,55 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
 
       <div className="space-y-2 border-t border-border/60 p-3">
         {disabledReason ? <p className="text-[11px] text-muted-foreground">{disabledReason}</p> : null}
-        <div className="flex flex-wrap gap-1.5">
-          {quick.map((q) => (
-            <Chip key={q} onClick={() => run(q)} disabled={!!disabledReason || busy} className="font-mono text-[11px]">
+        <div className="flex flex-wrap items-center gap-1.5" aria-label="Command shortcuts">
+          {DEFAULT_PRESETS.map((q) => (
+            <Chip key={q} onClick={() => run(q)} disabled={!!disabledReason || busy} className="font-mono text-[11px]" title={`Run ${q}`}>
               {q}
             </Chip>
           ))}
+          {presets.map((q) => (
+            <span key={q} className="group relative inline-flex">
+              <Chip onClick={() => run(q)} disabled={!!disabledReason || busy} className="max-w-[16rem] pr-6 font-mono text-[11px]" title={`Run ${q}`}>
+                <span className="truncate">{q}</span>
+              </Chip>
+              <button
+                type="button"
+                onClick={() => removePreset(q)}
+                aria-label={`Remove shortcut ${q}`}
+                title="Remove shortcut"
+                className="absolute right-1.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-foreground/10 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover:opacity-100"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+          {saving ? (
+            <>
+              <Chip
+                onClick={savePreset}
+                disabled={!command.trim()}
+                active
+                className="text-[11px] text-foreground"
+                aria-label="Save command shortcut"
+                icon={<Check />}
+              >
+                Save
+              </Chip>
+              <button
+                type="button"
+                onClick={cancelSaving}
+                aria-label="Cancel saving shortcut"
+                title="Cancel"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : (
+            <Chip onClick={startSaving} className="h-7 w-7 justify-center px-0" aria-label="Add command shortcut" title="Save a command as a shortcut">
+              <Plus />
+            </Chip>
+          )}
         </div>
         <div className="metal-inset flex items-center gap-2 rounded-lg px-3 focus-within:ring-2 focus-within:ring-primary/25">
           {cwd ? (
@@ -276,16 +386,18 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
               historyIdx.current = null;
             }}
             onKeyDown={onKeyDown}
-            disabled={!!disabledReason}
-            placeholder="npm test"
-            aria-label="Terminal command"
+            disabled={!!disabledReason && !saving}
+            placeholder={saving ? 'Save a command' : 'npm test'}
+            aria-label={saving ? 'Command to save' : 'Terminal command'}
             spellCheck={false}
             autoComplete="off"
             className="h-9 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
           />
-          <Button size="sm" variant="ghost" onClick={() => run(command)} disabled={!!disabledReason || busy || !command.trim()} aria-label="Run command">
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CornerDownLeft className="h-3.5 w-3.5" />}
-          </Button>
+          {saving ? null : (
+            <Button size="sm" variant="ghost" onClick={() => run(command)} disabled={!!disabledReason || busy || !command.trim()} aria-label="Run command">
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CornerDownLeft className="h-3.5 w-3.5" />}
+            </Button>
+          )}
         </div>
       </div>
     </div>
