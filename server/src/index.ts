@@ -14,7 +14,8 @@ import type { ServerMessage } from '../../shared/types.ts';
 const HOST = process.env.ORCH_HOST || '127.0.0.1';
 const PORT = Number(process.env.ORCH_PORT || 4317);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const WEB_DIST = path.resolve(here, '../../web/dist');
+// ORCH_WEB_DIST lets a packaged install (the macOS app) point at its bundled dashboard.
+const WEB_DIST = process.env.ORCH_WEB_DIST ? path.resolve(process.env.ORCH_WEB_DIST) : path.resolve(here, '../../web/dist');
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 function isLocal(hostHeader: string | undefined): boolean {

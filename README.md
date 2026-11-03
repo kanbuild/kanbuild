@@ -15,7 +15,19 @@ changes, desktop notifications tell you when you're needed, and one click opens 
 
 > Manage development through a Kanban board. Let AI agents handle implementation.
 
-## Requirements
+## Mac app
+
+Download **AI Orchestrator** for macOS (Apple silicon or Intel) from the [Releases page](https://github.com/nelsonng2002/autonomous-feature-agent/releases). Open the `.dmg` and drag the app to Applications.
+
+- It has the same board, pipeline and features as the web version. There's no account and no sign-in: everything runs locally against your own `claude` CLI login.
+- Node.js is bundled, so you only need `git` and an authenticated [Claude Code](https://code.claude.com) CLI. The app reads your shell's `PATH`, so it finds `claude` wherever your terminal does.
+- It shares data (`~/.local-orchestrator`) with the web version. If `npm start` is already running, the app connects to it instead of starting a second backend.
+- Closing the window keeps pipelines running, and quitting leaves running agents alive. They're picked up again on the next launch.
+- Backend log: `~/Library/Logs/AI Orchestrator/server.log` (Help → Show Backend Log).
+
+Build it yourself with `npm install && npm run desktop:dist` on a Mac (output in `desktop/release/`), or run it from source with `npm run desktop:dev`. Details, signing and the release process: [docs/desktop-app.md](docs/desktop-app.md).
+
+## Requirements (web version)
 
 - Node.js **22.13+** (uses the built-in `node:sqlite`; no native modules to compile)
 - `git`
@@ -342,3 +354,7 @@ ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start
 - `GET /api/runs/:id/{events,report}`
 - `GET/PUT /api/settings`
 - WebSocket `/ws`, which pushes `feature.updated`, `run.updated`, `run.event`, `notification` and similar messages.
+
+## License
+
+[MIT](LICENSE)

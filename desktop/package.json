@@ -1,0 +1,27 @@
+{
+  "name": "@orchestrator/desktop",
+  "productName": "AI Orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "macOS app for the Local AI Orchestrator: the same dashboard and backend, packaged with Electron",
+  "license": "MIT",
+  "author": "nelsonng2002",
+  "homepage": "https://github.com/nelsonng2002/autonomous-feature-agent",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node scripts/build-main.mjs",
+    "dev": "node scripts/build-main.mjs && electron .",
+    "fetch-node": "node scripts/fetch-node.mjs",
+    "dist": "node scripts/build-main.mjs && node scripts/fetch-node.mjs && electron-builder --config electron-builder.config.cjs --mac",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "43.8.6",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

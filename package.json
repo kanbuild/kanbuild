@@ -6,20 +6,29 @@
   "type": "module",
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "desktop"
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w web",
     "start": "npm run build -w web && npm run start -w server",
-    "test": "npm run test -w server",
-    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
-    "start:server": "npm run start -w server"
+    "test": "npm run test -w server && npm run test -w desktop",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web && npm run typecheck -w desktop",
+    "start:server": "npm run start -w server",
+    "build:server": "npm run build -w server",
+    "desktop:dev": "npm run build -w web && npm run build -w server && npm run dev -w desktop",
+    "desktop:dist": "npm run build -w web && npm run build -w server && npm run dist -w desktop"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nelsonng2002/autonomous-feature-agent.git"
   }
 }

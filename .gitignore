@@ -3,3 +3,5 @@ dist/
 .orchestrator-data/
 *.log
 .DS_Store
+desktop/vendor/
+desktop/release/
