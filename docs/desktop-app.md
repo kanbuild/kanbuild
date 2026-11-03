@@ -2,12 +2,12 @@
 
 Source files: `desktop/src/main.ts`, `desktop/src/env.ts`, `desktop/scripts/build-main.mjs`, `desktop/scripts/fetch-node.mjs`, `desktop/electron-builder.config.cjs`, `desktop/build/*`, `desktop/test/env.test.ts`, `server/build.mjs`, `.github/workflows/release-mac.yml`, `.github/workflows/ci.yml`
 
-The Mac app is **AI Orchestrator.app**, built with Electron. It has the same backend and dashboard as the web version and no sign-in. It does not reimplement anything. It starts the normal backend and shows `http://localhost:4317` in a window. The web version (`npm start` plus a browser) is unchanged, and both use the same data dir (`~/.local-orchestrator`), so projects and history are shared.
+The Mac app is **Kanbuild.app**, built with Electron. It has the same backend and dashboard as the web version and no sign-in. It does not reimplement anything. It starts the normal backend and shows `http://localhost:4317` in a window. The web version (`npm start` plus a browser) is unchanged, and both use the same data dir (`~/.local-orchestrator`), so projects and history are shared.
 
 ## Process model
 
 ```
-AI Orchestrator.app
+Kanbuild.app
  ├─ Electron main (desktop/dist/main.cjs, bundled from src/main.ts)
  │    ├─ probes 127.0.0.1:<port>/api/settings
  │    │    orchestrator answers → reuse it (never two backends on one DB)
@@ -16,7 +16,7 @@ AI Orchestrator.app
  │    └─ BrowserWindow → http://localhost:<port>   (no preload, contextIsolation, sandbox)
  └─ backend child: Resources/node/bin/node Resources/server/server.mjs
         env: login-shell PATH, ORCH_WEB_DIST=Resources/web, ORCH_PORT, ORCH_HOST=127.0.0.1
-        stdout/stderr → ~/Library/Logs/AI Orchestrator/server.log
+        stdout/stderr → ~/Library/Logs/Kanbuild/server.log
 ```
 
 ## Launch sequence (`main.ts`)
@@ -30,7 +30,7 @@ AI Orchestrator.app
    - Builds the env with `buildBackendEnv()` (env.ts:34). It drops `ELECTRON_*`, `NODE_ENV` and the inherited `NODE_OPTIONS`, and sets `NODE_OPTIONS=--disable-warning=ExperimentalWarning` (the server's `childEnv()` strips exactly this value again).
    - Spawns the backend (`cwd` = home) and waits up to 30 s for `probe()` to see the orchestrator.
 4. `createWindow()` (main.ts:151):
-   - Bounds are remembered in `<userData>/window-state.json`.
+   - Bounds are remembered in `<userData>/window-state.json`. `<userData>` follows `productName` (renamed from "AI Orchestrator" to "Kanbuild"), so the saved window bounds reset once after that upgrade. The `appId` (`io.github.nelsonng2002.ai-orchestrator`) and the data dir are deliberately unchanged.
    - `setWindowOpenHandler` and `will-navigate` send every URL that is not the dashboard's own origin (`isLocalUrl`, env.ts:53) to `shell.openExternal`, such as GitHub PR links.
 5. The menu (`buildMenu`, main.ts:187) has the standard app/Edit/Window menus. View → *Open in Browser*. Help → *Show Backend Log* and *Open Data Folder*.
 
@@ -58,7 +58,7 @@ In development (`!app.isPackaged`), `resources()` (main.ts:29) uses `ORCH_NODE_B
 
 ```bash
 npm run desktop:dev     # build web + server bundle + main, then launch Electron (needs Node 22.13+ on PATH)
-npm run desktop:dist    # full build → desktop/release/AI-Orchestrator-<version>-<arch>.{dmg,zip} (macOS only)
+npm run desktop:dist    # full build → desktop/release/Kanbuild-<version>-<arch>.{dmg,zip} (macOS only)
 npm run build:server    # just the backend bundle
 npm run test -w desktop # unit tests for env.ts
 ```
@@ -82,7 +82,7 @@ npm run test -w desktop # unit tests for env.ts
 1. Add the five values above as **repository** secrets (Settings → Secrets and variables → Actions → New repository secret). Environment secrets are not visible, because the workflow declares no `environment:`.
 2. Merge the workflow to the default branch (currently `claude/affectionate-wright-b6ps16`). GitHub shows **Run workflow** only for workflows on the default branch.
 3. Go to Actions → **Release macOS app** → **Run workflow** (the default branch). The job summary should say `Signed: true` and `Notarized: true`. Download the `macos-app` artifact.
-4. Install the dmg and check it with `spctl -a -vv "/Applications/AI Orchestrator.app"`, which should report `source=Notarized Developer ID`.
+4. Install the dmg and check it with `spctl -a -vv "/Applications/Kanbuild.app"`, which should report `source=Notarized Developer ID`.
 5. Publish: `git tag v0.1.0 && git push origin v0.1.0`.
 
 `.github/workflows/ci.yml` runs typecheck, tests and builds on Ubuntu and macOS for pushes to the default branch (`main` or `claude/affectionate-wright-b6ps16`) and for PRs (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`).
@@ -91,7 +91,7 @@ npm run test -w desktop # unit tests for env.ts
 
 - Only the backend's port matters. Set `ORCH_PORT` before launching the app to change it (the dashboard origin, and so its localStorage, follows the port).
 - If `npm start` is already running, the app reuses that backend, and quitting the app does not stop it.
-- Logs: `~/Library/Logs/AI Orchestrator/server.log` (on Linux dev runs, `<userData>/logs/server.log`).
+- Logs: `~/Library/Logs/Kanbuild/server.log` (on Linux dev runs, `<userData>/logs/server.log`).
 - After upgrading the server's Node requirement, bump `NODE_VERSION` in `fetch-node.mjs`.
 - Electron is pinned exactly (`desktop/package.json`) because `electronVersion` is read from it.
 - `.dmg` targets build only on macOS. On Linux, `npx electron-builder --config electron-builder.config.cjs --mac dir --arm64` (in `desktop/`) still produces an unsigned `.app` folder, which is useful to inspect the layout.

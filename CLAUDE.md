@@ -14,7 +14,7 @@
 
 ## What this app is
 
-**Local AI Orchestrator** (package `local-ai-orchestrator`) is a local-first Kanban board.
+**Kanbuild** (formerly Local AI Orchestrator; package `local-ai-orchestrator`) is a local-first Kanban board.
 You register git repos as *projects* and add *feature* cards. Dragging a card into **Build**
 runs headless Claude Code agents (`claude -p --output-format stream-json`) in an isolated
 git worktree and branch. They run through a configurable pipeline:

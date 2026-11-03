@@ -12,7 +12,7 @@ const repo = path.resolve(__dirname, '..');
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: 'io.github.nelsonng2002.ai-orchestrator',
-  productName: 'AI Orchestrator',
+  productName: 'Kanbuild',
   copyright: 'Copyright (c) 2026 nelsonng2002. MIT License.',
   electronVersion: require('electron/package.json').version,
   directories: { output: 'release', buildResources: 'build' },
@@ -41,10 +41,10 @@ module.exports = {
     identity: canSign ? undefined : null,
     notarize: canNotarize,
     extendInfo: {
-      NSAppleEventsUsageDescription: 'AI Orchestrator shows notifications and opens your editor via AppleScript.',
+      NSAppleEventsUsageDescription: 'Kanbuild shows notifications and opens your editor via AppleScript.',
     },
   },
-  dmg: { title: 'AI Orchestrator ${version}' },
-  artifactName: 'AI-Orchestrator-${version}-${arch}.${ext}',
+  dmg: { title: 'Kanbuild ${version}' },
+  artifactName: 'Kanbuild-${version}-${arch}.${ext}',
   publish: null,
 };

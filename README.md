@@ -1,7 +1,7 @@
-# Local AI Development Orchestrator
+# Kanbuild
 
 A local-first Kanban board that delegates feature development to autonomous **Claude Code** agents.
-Each project has its own board. When you drag a card into **Build**, the orchestrator creates a dedicated
+Each project has its own board. When you drag a card into **Build**, Kanbuild creates a dedicated
 git branch and worktree and runs a configurable **pipeline** of agents inside it:
 
 - a planner whose plan you approve;
@@ -17,13 +17,13 @@ changes, desktop notifications tell you when you're needed, and one click opens 
 
 ## Mac app
 
-Download **AI Orchestrator** for macOS (Apple silicon or Intel) from the [Releases page](https://github.com/nelsonng2002/autonomous-feature-agent/releases). Open the `.dmg` and drag the app to Applications.
+Download **Kanbuild** for macOS (Apple silicon or Intel) from the [Releases page](https://github.com/nelsonng2002/autonomous-feature-agent/releases). Open the `.dmg` and drag the app to Applications.
 
 - It has the same board, pipeline and features as the web version. There's no account and no sign-in: everything runs locally against your own `claude` CLI login.
 - Node.js is bundled, so you only need `git` and an authenticated [Claude Code](https://code.claude.com) CLI. The app reads your shell's `PATH`, so it finds `claude` wherever your terminal does.
 - It shares data (`~/.local-orchestrator`) with the web version. If `npm start` is already running, the app connects to it instead of starting a second backend.
 - Closing the window keeps pipelines running, and quitting leaves running agents alive. They're picked up again on the next launch.
-- Backend log: `~/Library/Logs/AI Orchestrator/server.log` (Help → Show Backend Log).
+- Backend log: `~/Library/Logs/Kanbuild/server.log` (Help → Show Backend Log).
 
 Build it yourself with `npm install && npm run desktop:dist` on a Mac (output in `desktop/release/`), or run it from source with `npm run desktop:dev`. Details, signing and the release process: [docs/desktop-app.md](docs/desktop-app.md).
 
@@ -46,11 +46,11 @@ npm run build && npm start
 
 Open <http://localhost:4317>. For development with hot reload, run `npm run dev` instead (backend on :4317, Vite on <http://localhost:5173>).
 
-1. **Add project**: enter the path of an existing git repository. The orchestrator checks the path is a repository and detects its branches.
+1. **Add project**: enter the path of an existing git repository. Kanbuild checks the path is a repository and detects its branches.
 2. **New feature**: give it a title, a detailed multiline description and a priority.
 3. Drag the card from **Backlog** to **Build**. The agent starts, or waits in the queue if every slot is taken.
 4. With the default pipeline, the planner writes a plan and the card shows **Approve plan**. Open the card, read the plan, then approve it (optionally with comments) or request changes.
-5. The developer implements the plan. The orchestrator then runs the project's validation commands, sending any failures back to the developer, and a tester agent adds tests.
+5. The developer implements the plan. Kanbuild then runs the project's validation commands, sending any failures back to the developer, and a tester agent adds tests.
 6. Click a card to follow along. The tabs are **Overview**, **Pipeline**, **Activity** (live), **Changes** (diff viewer), **Tests/Validation** and **Report**.
 7. When the pipeline finishes, the card moves to **Done**. Review the diff, then click **Create PR** or merge it yourself. Nothing is ever merged automatically.
 
@@ -82,7 +82,7 @@ Node.js backend (Express, ws, node:sqlite)
 
 ### Agent lifecycle
 
-When a card enters Build, the orchestrator does the following for each agent step of the pipeline:
+When a card enters Build, Kanbuild does the following for each agent step of the pipeline:
 
 1. Creates a run in the **Queued** state. The queue is stored in SQLite and runs in FIFO order, up to the concurrency limit (default **2**, set under Settings).
 2. Enters **Initialising**: it creates the branch `feature/<slug>-<id>` from the project's base branch and adds the worktree `<repo>-worktrees/feature-<slug>-<id>`.
@@ -106,7 +106,7 @@ plan → (approve plan) → develop → validate ⇄ fix → tests → validate 
 |---|---|---|---|
 | **Planner** | Reads only what it needs and writes an implementation plan | New; the developer then **resumes it**, so the plan and exploration are not re-read | read-only |
 | **Developer** | Implements the plan; fixes validation failures, review findings and your feedback | One session for plan → implement → fixes | edits + project allowlist |
-| **Validator** | The orchestrator runs the validation commands itself, with no agent and no tokens | — | — |
+| **Validator** | Kanbuild runs the validation commands itself, with no agent and no tokens | — | — |
 | **Tester** | Adds and runs tests for the feature | New, independent | edits + project allowlist |
 | **Reviewer** | Reviews `git diff <base>...HEAD` against the requirements and returns a verdict and findings | New, independent | read-only |
 
@@ -232,11 +232,11 @@ Each run records its Claude Code session ID. From a card's **Overview** tab you 
 - **Send follow-up** runs `claude -p "<message>" --resume <sessionId>` in the same worktree, in the background. You get the same live monitoring, a new report, and "Follow-up #n" in the run history.
 - **Continue in terminal** gives you `cd <worktree> && claude --resume <sessionId>` to copy. On macOS, **Open in Terminal** opens Terminal.app with that command. Sessions must be resumed from the worktree directory.
 
-When the orchestrator itself is started from inside a Claude Code session, the agents would inherit that session's ID. The orchestrator strips those session variables, so every agent gets its own session.
+When Kanbuild itself is started from inside a Claude Code session, the agents would inherit that session's ID. Kanbuild strips those session variables, so every agent gets its own session.
 
 ### Open in editor
 
-Pick an editor preset in Settings: VS Code (default), Cursor, Zed, WebStorm, IntelliJ, Finder, or a custom command. The orchestrator looks for the editor's CLI in these places, in order:
+Pick an editor preset in Settings: VS Code (default), Cursor, Zed, WebStorm, IntelliJ, Finder, or a custom command. Kanbuild looks for the editor's CLI in these places, in order:
 
 1. Your `PATH`.
 2. `/usr/local/bin`, `/opt/homebrew/bin`, and the CLI inside the app bundle.
@@ -283,7 +283,7 @@ Both are **estimates, not actual charges**. Claude subscription plans (Pro/Max/T
 ### Safety
 
 - The backend listens on `127.0.0.1` only and rejects requests whose `Host` or `Origin` is not localhost, which protects against DNS rebinding and cross-site requests.
-- Agents run with `--permission-mode acceptEdits` and a per-project **allowlist** of tools (editable in Project settings). Anything not on the list is denied. The orchestrator never uses `--dangerously-skip-permissions`.
+- Agents run with `--permission-mode acceptEdits` and a per-project **allowlist** of tools (editable in Project settings). Anything not on the list is denied. Kanbuild never uses `--dangerously-skip-permissions`.
 - Every agent works in its own worktree, so the original working directory is never touched.
 - Branches are **never merged** automatically, and completed worktrees are kept for review. Pull requests are only created when you click **Create PR**, or when you enabled auto-PR for the project. The orchestrator never force-pushes.
 - The planner and reviewer run read-only. Validation commands run in the worktree with the agent session variables and the GitHub token stripped from their environment.

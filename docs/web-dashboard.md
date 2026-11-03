@@ -18,7 +18,8 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 - **Aliases:** `@` → `web/src`, `@shared` → `../shared`. Shared types are imported as `@shared/types.ts`.
 - **Dev:** Vite on `127.0.0.1:5173`, proxying `/api` and `/ws` (ws:true) to :4317.
 - **Checks:** there are no web tests and no linter. The only check is `npm run typecheck`.
-- `index.html`: title "Local AI Orchestrator", 🧩 SVG favicon.
+- `index.html`: title "Kanbuild", 🧩 SVG favicon.
+- **Branding:** the product name is **Kanbuild**. The sidebar mark is `components/Logo.tsx` (a placeholder `Bot` icon until the real logo lands; swap it there only).
 
 ## Bootstrap (`main.tsx`)
 

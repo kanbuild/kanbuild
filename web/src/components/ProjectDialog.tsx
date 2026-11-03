@@ -249,7 +249,7 @@ export function ProjectDialog({
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Toggle checked={pipeline.plan} onChange={(v) => setP({ plan: v })} label="1. Plan first" hint="A read-only planner writes an implementation plan." />
               <Toggle checked={pipeline.planApproval} disabled={!pipeline.plan} onChange={(v) => setP({ planApproval: v })} label="Approve the plan" hint="Pause until you approve or comment on the plan." />
-              <Toggle checked={pipeline.validate} onChange={(v) => setP({ validate: v })} label="2. Validate" hint="The orchestrator runs the commands below after each code change; failures go back to the developer." />
+              <Toggle checked={pipeline.validate} onChange={(v) => setP({ validate: v })} label="2. Validate" hint="Kanbuild runs the commands below after each code change; failures go back to the developer." />
               <Toggle checked={pipeline.tester} onChange={(v) => setP({ tester: v })} label="3. Tester agent" hint="A separate agent adds and runs tests." />
               <Toggle checked={pipeline.reviewer} onChange={(v) => setP({ reviewer: v })} label="4. Reviewer agent" hint="A read-only agent reviews the diff; requested changes go back to the developer." />
               <Toggle checked={pipeline.finalApproval} onChange={(v) => setP({ finalApproval: v })} label="5. Final approval" hint="Pause before Done so you can review the diff." />

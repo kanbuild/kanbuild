@@ -359,7 +359,7 @@ function ValidationView({ run }: { run: Run }) {
   const results = run.validation ?? [];
   return (
     <div className="space-y-4 p-5">
-      <p className="text-sm text-muted-foreground">Commands run by the orchestrator in the worktree (no agent, no tokens). The first failure stops the run and is sent back to the developer.</p>
+      <p className="text-sm text-muted-foreground">Commands run by Kanbuild in the worktree (no agent, no tokens). The first failure stops the run and is sent back to the developer.</p>
       <div className="divide-y rounded-lg border">
         {results.map((r, i) => {
           const ok = r.exitCode === 0 && !r.timedOut;

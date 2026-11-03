@@ -104,7 +104,7 @@ export default function App() {
   const removeProject = async (p: Project) => {
     const ok = await confirm({
       title: `Remove "${p.name}" from the dashboard?`,
-      description: 'Its board and execution history are removed from the orchestrator. The repository, branches and worktrees on disk are NOT deleted.',
+      description: 'Its board and execution history are removed from Kanbuild. The repository, branches and worktrees on disk are NOT deleted.',
       confirmLabel: 'Remove project',
       destructive: true,
     });
@@ -219,7 +219,7 @@ export default function App() {
             <FolderGit2 className="h-10 w-10 text-muted-foreground" />
             <h1 className="text-lg font-semibold">Register your first project</h1>
             <p className="max-w-md text-sm text-muted-foreground">
-              Point the orchestrator at an existing local Git repository. Each feature you move into Build gets its own branch, worktree and Claude Code agent.
+              Point Kanbuild at an existing local Git repository. Each feature you move into Build gets its own branch, worktree and Claude Code agent.
             </p>
             <Button onClick={() => setProjectDialog({ open: true, project: null })}>
               <Plus /> Add project
