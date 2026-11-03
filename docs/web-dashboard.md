@@ -261,6 +261,8 @@ Cards are sorted by `position`, then `createdAt`.
 
 ### UI primitives (`components/ui/`)
 
+The landing page (`landing/`) imports these, plus `Logo.tsx`, `lib/utils.ts` and `index.css`, directly through its `@` → `web/src` alias. Keep them free of dashboard-only imports (store, api), or the landing build breaks. See [landing-page.md](landing-page.md).
+
 | File | Contents |
 |---|---|
 | `button.tsx` | variants default, destructive, outline, secondary, ghost, link; sizes default, sm, lg, icon; `asChild` |

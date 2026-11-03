@@ -29,6 +29,7 @@ Monorepo layout (npm workspaces, Node ≥ 22.13 for `node:sqlite`):
 | `server/src/` | Express + ws backend, run directly with tsx (no build). Orchestrator, pipeline, agent runner, git, GitHub, SQLite |
 | `server/test/` | vitest suites + `fixtures/fake-claude.mjs` (a fake `claude` CLI) |
 | `web/src/` | Vite + React 18 + Tailwind dashboard (shadcn-style UI, custom store, no router) |
+| `landing/` | Static marketing site (Vite multi-page: home + `/donate/`), reuses `web/src` UI via the `@` alias |
 | `desktop/` | Electron macOS app: `src/main.ts` spawns or reuses the backend and opens a window. Packaging, signing |
 | `shared/types.ts` | Types shared by server and web, `API_VERSION`, WebSocket `ServerMessage` union |
 | `docs/` | **The documentation. Read this instead of code.** |
@@ -40,10 +41,11 @@ npm install                 # once
 npm run dev                 # server :4317 (tsx watch) + Vite :5173 (proxies /api, /ws)
 npm start                   # build web, then serve everything on http://127.0.0.1:4317
 npm test                    # server + desktop vitest suites (needs git on PATH)
-npm run typecheck           # tsc --noEmit for server and web (web's only check)
+npm run typecheck           # tsc --noEmit for server, web, desktop and landing
 npm run build               # vite build -> web/dist
 cd server && npx vitest run test/pipeline.test.ts   # a single test file
 ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start   # UI demo, no tokens spent
+npm run landing:dev         # landing page on :5174 (landing:build → landing/dist)
 npm run desktop:dev         # Mac app from source (Electron); desktop:dist packages the .dmg (macOS only)
 ```
 
@@ -63,6 +65,7 @@ npm run desktop:dev         # Mac app from source (Electron); desktop:dist packa
 | [docs/settings-projects-features.md](docs/settings-projects-features.md) | Global settings, project config and defaults, feature CRUD and moves, dependencies, editor, notifications, pricing |
 | [docs/web-dashboard.md](docs/web-dashboard.md) | Frontend stack, store, WebSocket client, API client, every component, styling, UI gotchas |
 | [docs/desktop-app.md](docs/desktop-app.md) | macOS app: launch/reuse logic, PATH resolution, bundled Node, packaging, signing/notarization, releases |
+| [docs/landing-page.md](docs/landing-page.md) | Marketing site: pages, download → donate flow, DMG/Stripe config, design-system reuse |
 | [docs/testing.md](docs/testing.md) | How tests are structured and run, isolation pattern, fake-claude knobs, what each suite covers |
 
 ## Critical invariants (don't break these)

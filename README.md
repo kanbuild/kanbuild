@@ -27,6 +27,10 @@ Download **Kanbuild** for macOS (Apple silicon or Intel) from the [Releases page
 
 Build it yourself with `npm install && npm run desktop:dist` on a Mac (output in `desktop/release/`), or run it from source with `npm run desktop:dev`. Details, signing and the release process: [docs/desktop-app.md](docs/desktop-app.md).
 
+## Landing page
+
+`landing/` holds the public Kanbuild site: hero, features, download and GitHub sections, plus a donate page that opens after a download. Run `npm run landing:dev`, or build it with `npm run landing:build` and deploy `landing/dist` to any static host. Set the .dmg and Stripe links in `landing/src/config.ts` (or `VITE_DMG_URL` / `VITE_STRIPE_LINK`). See [docs/landing-page.md](docs/landing-page.md).
+
 ## Requirements (web version)
 
 - Node.js **22.13+** (uses the built-in `node:sqlite`; no native modules to compile)
