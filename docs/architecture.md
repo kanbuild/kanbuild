@@ -1,6 +1,6 @@
 # Architecture
 
-Source files: `server/src/index.ts`, `server/src/db.ts`, `server/src/events.ts`, `web/vite.config.ts`, root `package.json`, `server/package.json`, `web/package.json`, `.gitignore`
+Source files: `server/src/index.ts`, `server/build.mjs`, `server/src/db.ts`, `server/src/events.ts`, `web/vite.config.ts`, root `package.json`, `server/package.json`, `web/package.json`, `.gitignore`
 
 ## Process model
 
@@ -20,7 +20,8 @@ Backend: Node + Express + ws (server/src/index.ts), run by tsx, no build step
 
 - Agents are **detached**, so they keep running when the backend stops. On startup `orchestrator.recover()` reattaches to them using the stored `log_offset` and the `exit_code` file. See [orchestrator-and-agents.md](orchestrator-and-agents.md).
 - All pipeline decisions are derived from DB state. See [pipeline.md](pipeline.md).
-- Web is a single-page app. In production the server serves `web/dist`; in dev, Vite serves the UI.
+- Web is a single-page app. In production the server serves `web/dist` (or `ORCH_WEB_DIST`); in dev, Vite serves the UI.
+- The **macOS app** (`desktop/`, Electron) starts this same backend as a child process (bundled Node + `server/dist/server.mjs`), or reuses one already listening, and shows the dashboard in a window. See [desktop-app.md](desktop-app.md).
 
 ## Ports
 
@@ -79,6 +80,7 @@ runs/<runId>/
 | `ORCH_HOST` | `127.0.0.1` | index.ts:14 | Bind address |
 | `ORCH_PORT` | `4317` | index.ts:15 | Backend port |
 | `ORCH_DATA_DIR` | `~/.local-orchestrator` | db.ts:11 | Data dir (read at import) |
+| `ORCH_WEB_DIST` | `<repo>/web/dist` | index.ts:18 | Built dashboard to serve (the Mac app points it at `Resources/web`) |
 | `ORCH_DB_FILE` | `<DATA_DIR>/orchestrator.db` | db.ts:129 | SQLite file |
 | `ORCH_CLAUDE_BIN` | `claude` | settings.ts:12,24 | Claude binary; **always overrides** the stored `claudeBinary` setting |
 | `ORCH_CLAUDE_HOME` | `os.homedir()` | catalog.ts:18 | Home used for MCP and skill discovery (tests) |
@@ -97,9 +99,11 @@ runs/<runId>/
 | root | `start` | `build -w web`, then server start |
 | root | `start:server` | Server only |
 | root | `build` | `vite build` (web only) |
-| root | `test` | server vitest |
-| root | `typecheck` | server then web `tsc --noEmit` |
-| server | `dev`/`start`/`test`/`typecheck` | `tsx watch` / `tsx` / `vitest run` / `tsc` (all with the `NODE_OPTIONS` above) |
+| root | `build:server` | esbuild bundle → `server/dist/server.mjs` (for the Mac app) |
+| root | `desktop:dev` / `desktop:dist` | Build everything, then launch Electron / package the .app ([desktop-app.md](desktop-app.md)) |
+| root | `test` | server vitest, then desktop vitest |
+| root | `typecheck` | server, web, then desktop `tsc --noEmit` |
+| server | `dev`/`start`/`test`/`typecheck`/`build` | `tsx watch` / `tsx` / `vitest run` / `tsc` (with the `NODE_OPTIONS` above) / `node build.mjs` |
 | web | `dev`/`build`/`typecheck` | vite / vite build / tsc |
 
 ## Dependencies
@@ -107,6 +111,8 @@ runs/<runId>/
 - **Server:** `express ^4.21`, `ws ^8.18`, `tsx ^4.19`. Dev: `typescript ^5.7`, `vitest ^2.1`, `@types/*`.
 - **Web:** see [web-dashboard.md](web-dashboard.md#stack).
 - **Root:** `concurrently` only.
+- **Server dev:** `esbuild` (bundle for packaged installs).
+- **Desktop:** `electron` (pinned), `electron-builder`, `esbuild`, `vitest`. See [desktop-app.md](desktop-app.md).
 
 ## tsconfig
 

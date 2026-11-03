@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#27272f"/>
+      <stop offset="1" stop-color="#0b0b0f"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824px rounded square centered in 1024 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- three kanban columns -->
+  <g fill="#ffffff" fill-opacity="0.10">
+    <rect x="215" y="250" width="170" height="524" rx="36"/>
+    <rect x="427" y="250" width="170" height="524" rx="36"/>
+    <rect x="639" y="250" width="170" height="524" rx="36"/>
+  </g>
+  <!-- cards -->
+  <rect x="239" y="282" width="122" height="96" rx="22" fill="#a1a1aa"/>
+  <rect x="239" y="398" width="122" height="96" rx="22" fill="#a1a1aa" fill-opacity="0.6"/>
+  <rect x="451" y="282" width="122" height="150" rx="22" fill="#f59e0b"/>
+  <rect x="663" y="282" width="122" height="96" rx="22" fill="#10b981"/>
+  <rect x="663" y="398" width="122" height="96" rx="22" fill="#10b981"/>
+  <rect x="663" y="514" width="122" height="96" rx="22" fill="#10b981" fill-opacity="0.6"/>
+  <!-- spark: the agent -->
+  <path d="M512 520 L534 590 L604 612 L534 634 L512 704 L490 634 L420 612 L490 590 Z" fill="#ffffff"/>
+</svg>

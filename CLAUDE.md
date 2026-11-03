@@ -20,6 +20,7 @@ runs headless Claude Code agents (`claude -p --output-format stream-json`) in an
 git worktree and branch. They run through a configurable pipeline:
 plan → approve plan → develop → validate ⇄ fix → test → review ⇄ fix → final approval → Done → (optional) GitHub PR.
 The dashboard streams progress, tokens and cost estimates, diffs and reports live. Branches are never merged automatically.
+It ships two ways: the web version (`npm start` + browser) and a **macOS app** (Electron, `desktop/`) that runs the same backend. MIT licensed.
 
 Monorepo layout (npm workspaces, Node ≥ 22.13 for `node:sqlite`):
 
@@ -28,6 +29,7 @@ Monorepo layout (npm workspaces, Node ≥ 22.13 for `node:sqlite`):
 | `server/src/` | Express + ws backend, run directly with tsx (no build). Orchestrator, pipeline, agent runner, git, GitHub, SQLite |
 | `server/test/` | vitest suites + `fixtures/fake-claude.mjs` (a fake `claude` CLI) |
 | `web/src/` | Vite + React 18 + Tailwind dashboard (shadcn-style UI, custom store, no router) |
+| `desktop/` | Electron macOS app: `src/main.ts` spawns or reuses the backend and opens a window. Packaging, signing |
 | `shared/types.ts` | Types shared by server and web, `API_VERSION`, WebSocket `ServerMessage` union |
 | `docs/` | **The documentation. Read this instead of code.** |
 
@@ -37,11 +39,12 @@ Monorepo layout (npm workspaces, Node ≥ 22.13 for `node:sqlite`):
 npm install                 # once
 npm run dev                 # server :4317 (tsx watch) + Vite :5173 (proxies /api, /ws)
 npm start                   # build web, then serve everything on http://127.0.0.1:4317
-npm test                    # server vitest suite (needs git on PATH)
+npm test                    # server + desktop vitest suites (needs git on PATH)
 npm run typecheck           # tsc --noEmit for server and web (web's only check)
 npm run build               # vite build -> web/dist
 cd server && npx vitest run test/pipeline.test.ts   # a single test file
 ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start   # UI demo, no tokens spent
+npm run desktop:dev         # Mac app from source (Electron); desktop:dist packages the .dmg (macOS only)
 ```
 
 ## Documentation index
@@ -59,6 +62,7 @@ ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start   # UI demo,
 | [docs/capabilities-catalog.md](docs/capabilities-catalog.md) | MCP server and skill discovery, redaction, per-run MCP config and skills plugin, allow/deny rules |
 | [docs/settings-projects-features.md](docs/settings-projects-features.md) | Global settings, project config and defaults, feature CRUD and moves, dependencies, editor, notifications, pricing |
 | [docs/web-dashboard.md](docs/web-dashboard.md) | Frontend stack, store, WebSocket client, API client, every component, styling, UI gotchas |
+| [docs/desktop-app.md](docs/desktop-app.md) | macOS app: launch/reuse logic, PATH resolution, bundled Node, packaging, signing/notarization, releases |
 | [docs/testing.md](docs/testing.md) | How tests are structured and run, isolation pattern, fake-claude knobs, what each suite covers |
 
 ## Critical invariants (don't break these)
@@ -93,6 +97,7 @@ ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start   # UI demo,
   `RunKind`/labels in `shared/types.ts` and `web/src/components/status.tsx`, and `PipelineTab.tsx` steps.
 - UI: shadcn-style primitives in `web/src/components/ui/`, `cn()` from `lib/utils.ts`, `confirm()` and `toast()` helpers.
 - Commit messages: short imperative summary.
+- The Mac app must stay a thin shell: features go in server/web so both versions get them. Backend-only paths come from env (`ORCH_WEB_DIST`).
 
 ## Docs maintenance checklist (run after every change)
 

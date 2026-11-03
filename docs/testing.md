@@ -1,11 +1,11 @@
 # Testing
 
-Source files: `server/test/*.test.ts`, `server/test/fixtures/fake-claude.mjs`
+Source files: `server/test/*.test.ts`, `server/test/fixtures/fake-claude.mjs`, `desktop/test/env.test.ts`, `.github/workflows/ci.yml`
 
 ## Running
 
 ```bash
-npm test                                          # all server tests (vitest run)
+npm test                                          # server tests, then desktop tests (vitest run)
 cd server && npx vitest run test/pipeline.test.ts # one file
 npm run typecheck                                 # server + web tsc (web's only check)
 ```
@@ -13,6 +13,10 @@ npm run typecheck                                 # server + web tsc (web's only
 **Requirements:** `git` on PATH and Node ≥ 22.13. There is no vitest config file, so defaults apply: `*.test.ts`, and each file runs in its own worker. Scripts set `NODE_OPTIONS=--disable-warning=ExperimentalWarning`.
 
 **Web:** no tests and no linter.
+
+**Desktop:** `desktop/test/env.test.ts` unit-tests the pure helpers in `desktop/src/env.ts` (login-shell PATH parsing, PATH fallback, backend env, local-URL check). The Electron main process has no automated test. To smoke-test it on Linux, run Playwright's `_electron.launch` under `xvfb-run` with `--no-sandbox`, `ORCH_DATA_DIR`, `ORCH_CLAUDE_BIN=<fake>` and `ORCH_NODE_BIN=node` (see [desktop-app.md](desktop-app.md)).
+
+**CI:** `.github/workflows/ci.yml` runs typecheck, tests and the web/server builds on Ubuntu and macOS.
 
 ## Isolation pattern (e2e files)
 
