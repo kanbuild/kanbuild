@@ -38,7 +38,7 @@ To add a setting:
 
 **`updateProject`** (line 221):
 - `path` is immutable (400).
-- A new `baseBranch` must exist.
+- A new `baseBranch` must exist. The dashboard can change it from the Project dialog or the header `BranchSwitcher` (see [web-dashboard.md](web-dashboard.md#branchswitchertsx-project-header)). Features already started keep their stored `baseRef`.
 - `pipeline` and `roles` are **merged** over the existing values via `cleanPipeline`/`cleanRoles`.
 - `mcpServers` and `skills` are replaced.
 - An empty `name` or `worktreeRoot` keeps the old value.

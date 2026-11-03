@@ -84,7 +84,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 
 **Main area**
 - An **out-of-sync banner** when `settings.apiVersion !== API_VERSION`, suggesting a rebuild via `npm start`.
-- Project header: name, path, base branch, est. project cost; "Project settings" and "New feature" buttons.
+- Project header: name, the **base-branch switcher** (`BranchSwitcher`), path, est. project cost; "Project settings" and "New feature" buttons.
 - The `Board`.
 - An empty state when there is no project.
 
@@ -129,6 +129,13 @@ Cards are sorted by `position`, then `createdAt`.
 - `RunProgress`: indeterminate when running without a reported progress.
 - `newTokens` (excludes cache reads), `runCost` (estimated ?? reported).
 - `PriorityBadge`.
+
+### `BranchSwitcher.tsx` (project header)
+
+- A `GitBranch` chip showing `project.baseBranch`. Clicking it opens a popover (absolute panel; outside click or Esc closes it). Keyed by project ID in `App.tsx`, so it resets when switching projects.
+- On every open it reloads branches via `api.validatePath(project.path)` (no dedicated endpoint) and marks the repo's checked-out branch.
+- A filter input narrows the list. Choosing a branch calls `api.updateProject(id, {baseBranch})`, then `upsertProject` and a toast. The server rejects unknown branches (toast error).
+- It only changes the ref **new** features branch from. Existing features keep `feature.baseRef`, and the repo's own checkout is never touched (no `git checkout`).
 
 ### `FeatureDialog.tsx`
 

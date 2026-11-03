@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, FolderGit2, Plus, Settings, SlidersHorizontal, Trash2, Wifi, WifiOff } from 'lucide-react';
+import { FolderGit2, Plus, Settings, SlidersHorizontal, Trash2, Wifi, WifiOff } from 'lucide-react';
 import { API_VERSION, type Feature, type Project } from '@shared/types.ts';
 import { api } from './api';
 import { getState, loadFeatures, onNotification, useStore } from './store';
@@ -7,6 +7,8 @@ import { needsAttention } from './components/status';
 import { cn, formatCost } from './lib/utils';
 import { Button } from './components/ui/button';
 import { Board } from './components/Board';
+import { BranchSwitcher } from './components/BranchSwitcher';
+import { Logo } from './components/Logo';
 import { FeatureDialog } from './components/FeatureDialog';
 import { ProjectDialog } from './components/ProjectDialog';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -120,11 +122,9 @@ export default function App() {
     <div className="flex h-screen overflow-hidden">
       <aside className="flex w-64 shrink-0 flex-col border-r bg-muted/30">
         <div className="flex items-center gap-2 px-4 py-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Bot className="h-4 w-4" />
-          </div>
+          <Logo />
           <div>
-            <div className="text-sm font-semibold leading-tight">AI Orchestrator</div>
+            <div className="text-sm font-semibold leading-tight">Kanbuild</div>
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               {connected ? <Wifi className="h-3 w-3 text-emerald-500" /> : <WifiOff className="h-3 w-3 text-red-500" />}
               {connected ? 'local backend connected' : 'reconnecting…'}
@@ -192,10 +192,13 @@ export default function App() {
             <header className="flex items-center justify-between gap-4 border-b px-5 py-3">
               <div className="min-w-0">
                 <h1 className="truncate text-base font-semibold">{project.name}</h1>
-                <p className="truncate font-mono text-[11px] text-muted-foreground" title={project.path}>
-                  {project.path} · base {project.baseBranch}
-                  {project.description && <span className="font-sans"> · {project.description}</span>}
-                </p>
+                <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
+                  <BranchSwitcher key={project.id} project={project} />
+                  <span className="truncate font-mono" title={project.path}>
+                    {project.path}
+                    {project.description && <span className="font-sans"> · {project.description}</span>}
+                  </span>
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {projectCost > 0 && <span className="text-xs text-muted-foreground" title="Sum of all agent runs in this project; estimate only">est. ~{formatCost(projectCost)}</span>}
