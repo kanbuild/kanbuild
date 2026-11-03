@@ -28,6 +28,6 @@ export const TabsTrigger = React.forwardRef<HTMLButtonElement, React.ComponentPr
 TabsTrigger.displayName = 'TabsTrigger';
 
 export const TabsContent = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>>(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content ref={ref} className={cn('focus-visible:outline-none', className)} {...props} />
+  <TabsPrimitive.Content ref={ref} className={cn('focus-visible:outline-none data-[state=active]:animate-fade-up', className)} {...props} />
 ));
 TabsContent.displayName = 'TabsContent';

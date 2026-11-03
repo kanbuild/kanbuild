@@ -36,7 +36,7 @@ export function Toaster() {
         <div
           key={t.id}
           className={cn(
-            'metal-surface pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-xl animate-in slide-in-from-bottom-2',
+            'metal-surface pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-xl animate-toast-in origin-bottom-right',
             t.tone === 'error' && 'border-red-300 text-red-800 dark:border-red-900/80 dark:text-red-200',
           )}
         >

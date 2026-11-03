@@ -259,7 +259,7 @@ describe('roles', () => {
 describe('notifications', () => {
   it('escapes osascript strings and filters by level', () => {
     const args = systemNotificationArgs('Plan "ready"', 'Feature \\ x');
-    expect(args[1]).toBe('display notification "Feature \\\\ x" with title "AI Orchestrator" subtitle "Plan \\"ready\\""');
+    expect(args[1]).toBe('display notification "Feature \\\\ x" with title "Kanbuild" subtitle "Plan \\"ready\\""');
     expect(shouldNotify('attention', 'success')).toBe(false);
     expect(shouldNotify('attention', 'error')).toBe(true);
     expect(shouldNotify('off', 'attention')).toBe(false);

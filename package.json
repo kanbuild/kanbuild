@@ -7,18 +7,22 @@
   "workspaces": [
     "server",
     "web",
-    "desktop"
+    "desktop",
+    "landing"
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w web",
     "start": "npm run build -w web && npm run start -w server",
     "test": "npm run test -w server && npm run test -w desktop",
-    "typecheck": "npm run typecheck -w server && npm run typecheck -w web && npm run typecheck -w desktop",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web && npm run typecheck -w desktop && npm run typecheck -w landing",
     "start:server": "npm run start -w server",
     "build:server": "npm run build -w server",
     "desktop:dev": "npm run build -w web && npm run build -w server && npm run dev -w desktop",
-    "desktop:dist": "npm run build -w web && npm run build -w server && npm run dist -w desktop"
+    "desktop:dist": "npm run build -w web && npm run build -w server && npm run dist -w desktop",
+    "landing:dev": "npm run dev -w landing",
+    "landing:build": "npm run build -w landing",
+    "landing:preview": "npm run build -w landing && npm run preview -w landing"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

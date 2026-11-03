@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Bot, Coins, FolderGit2, GitBranch, LayoutGrid, Monitor, Moon, MoveRight, Plus, Settings, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
+import { ArrowRight, Coins, FolderGit2, LayoutGrid, Monitor, Moon, MoveRight, Plus, Settings, SlidersHorizontal, Sun, Trash2 } from 'lucide-react';
 import { API_VERSION, type Feature, type Project } from '@shared/types.ts';
 import { api } from './api';
 import { getState, loadFeatures, onNotification, useStore } from './store';
@@ -8,6 +8,8 @@ import { cn, formatCost } from './lib/utils';
 import { Button } from './components/ui/button';
 import { useTheme, setTheme, type Theme } from './theme';
 import { Board } from './components/Board';
+import { BranchSwitcher } from './components/BranchSwitcher';
+import { Logo } from './components/Logo';
 import { FeatureDialog } from './components/FeatureDialog';
 import { ProjectDialog } from './components/ProjectDialog';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -134,7 +136,7 @@ export default function App() {
   const removeProject = async (p: Project) => {
     const ok = await confirm({
       title: `Remove "${p.name}" from the dashboard?`,
-      description: 'Its board and execution history are removed from the orchestrator. The repository, branches and worktrees on disk are NOT deleted.',
+      description: 'Its board and execution history are removed from Kanbuild. The repository, branches and worktrees on disk are NOT deleted.',
       confirmLabel: 'Remove project',
       destructive: true,
     });
@@ -152,11 +154,9 @@ export default function App() {
     <div className="app-backdrop flex h-screen overflow-hidden">
       <aside className="metal-glass m-2 mr-0 flex w-64 shrink-0 flex-col rounded-2xl">
         <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
-          <div className="metal-chrome flex h-8 w-8 items-center justify-center rounded-xl">
-            <Bot className="h-4 w-4 text-[hsl(var(--accent-hi))]" />
-          </div>
+          <Logo />
           <div className="min-w-0">
-            <div className="chrome-text text-sm font-semibold leading-tight tracking-tight">AI Orchestrator</div>
+            <div className="chrome-text text-sm font-semibold leading-tight tracking-tight">Kanbuild</div>
             <div className="mt-0.5 inline-flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500 shadow-[0_0_6px_hsl(152_80%_45%)]' : 'animate-pulse bg-red-500')} />
               {connected ? 'local backend connected' : 'reconnecting…'}
@@ -231,8 +231,9 @@ export default function App() {
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                   <h1 className="truncate text-sm font-semibold tracking-tight">{project.name}</h1>
                 </div>
+                <BranchSwitcher key={project.id} project={project} />
                 <p className="hidden min-w-0 truncate font-mono text-[11px] text-muted-foreground md:block" title={project.path}>
-                  {project.path} · <GitBranch className="inline h-3 w-3" /> {project.baseBranch}
+                  {project.path}
                   {project.description && <span className="font-sans"> · {project.description}</span>}
                 </p>
               </div>
@@ -268,7 +269,7 @@ export default function App() {
                 <div>
                   <h2 className="text-sm font-semibold">Register your first project</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Point the orchestrator at an existing local Git repository. Each feature you move into Build gets its own branch, worktree and Claude Code agent.
+                    Point Kanbuild at an existing local Git repository. Each feature you move into Build gets its own branch, worktree and Claude Code agent.
                   </p>
                 </div>
               </div>

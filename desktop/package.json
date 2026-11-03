@@ -1,9 +1,9 @@
 {
   "name": "@orchestrator/desktop",
-  "productName": "AI Orchestrator",
+  "productName": "Kanbuild",
   "version": "0.1.0",
   "private": true,
-  "description": "macOS app for the Local AI Orchestrator: the same dashboard and backend, packaged with Electron",
+  "description": "macOS app for Kanbuild: the same dashboard and backend, packaged with Electron",
   "license": "MIT",
   "author": "nelsonng2002",
   "homepage": "https://github.com/nelsonng2002/autonomous-feature-agent",

@@ -18,7 +18,7 @@ import { buildBackendEnv, isLocalUrl, parseMarkedPath, withFallbackPath } from '
 const PORT = Number(process.env.ORCH_PORT || 4317);
 const BASE_URL = `http://localhost:${PORT}`;
 const PROBE_URL = `http://127.0.0.1:${PORT}/api/settings`;
-const LOG_DIR = process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Logs', 'AI Orchestrator') : path.join(app.getPath('userData'), 'logs');
+const LOG_DIR = process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Logs', 'Kanbuild') : path.join(app.getPath('userData'), 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'server.log');
 
 let backend: ChildProcess | null = null;
@@ -130,7 +130,7 @@ async function onBackendCrash(code: number | null, signal: NodeJS.Signals | null
 }
 
 function fatal(err: unknown) {
-  dialog.showErrorBox('AI Orchestrator could not start', `${err instanceof Error ? err.message : String(err)}\n\nLog: ${LOG_FILE}`);
+  dialog.showErrorBox('Kanbuild could not start', `${err instanceof Error ? err.message : String(err)}\n\nLog: ${LOG_FILE}`);
   app.exit(1);
 }
 
@@ -153,7 +153,7 @@ function createWindow() {
     ...loadBounds(),
     minWidth: 900,
     minHeight: 600,
-    title: 'AI Orchestrator',
+    title: 'Kanbuild',
     backgroundColor: '#0b0c0e',
     show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
