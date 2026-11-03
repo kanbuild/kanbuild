@@ -51,7 +51,7 @@ afterAll(() => {
 
 const settings: Settings = {
   concurrency: 2, agentProfile: 'lean', effort: '', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude',
-  notifications: 'all', systemNotifications: false,
+  notifications: 'all', systemNotifications: false, autoStartBuild: true,
 };
 const mkProject = (p: Partial<Project> = {}): Project => ({
   id: 'prj', name: 'Repo', description: '', path: repo, baseBranch: 'main', worktreeRoot: '/w', allowedTools: ['Read'], model: '', agentProfile: '',

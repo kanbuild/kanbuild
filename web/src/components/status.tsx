@@ -33,16 +33,24 @@ export function AgentStatusBadge({ status }: { status: AgentStatus | null }) {
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
   const v = priority === 'high' ? 'red' : priority === 'medium' ? 'amber' : 'gray';
-  return <Badge variant={v}>{priority}</Badge>;
+  return (
+    <Badge variant={v} dot className="capitalize">
+      {priority}
+    </Badge>
+  );
 }
 
 /** A step finished in Build but nothing is waiting or running: the pipeline needs "Continue". */
 export const isPaused = (f: Feature) => f.status === 'build' && f.agentStatus === 'completed' && !f.gate;
 
+/** In Build with no agent assigned: auto-start is off and the card waits for ▶ (POST /features/:id/start). */
+export const isReadyToStart = (f: Feature) => f.status === 'build' && !f.agentStatus && !f.gate;
+
 /** Waiting for the user (checkpoint) or paused: the feature is not finished even though its last step completed. */
 export const isWaiting = (f: Feature) => !!f.gate || isPaused(f);
 
 export function RunProgress({ feature, run, className }: { feature: Feature; run: Run | null | undefined; className?: string }) {
+  if (isReadyToStart(feature) && (!run || run.id === feature.currentRunId)) return null;
   const status = run?.status ?? feature.agentStatus;
   if (!status) return null;
   if (isWaiting(feature) && (!run || run.id === feature.currentRunId)) return <Progress value={100} tone="amber" className={className} />;
@@ -112,14 +120,14 @@ export function PipelineChip({ feature }: { feature: Feature }) {
     const m = GATE_META[feature.gate.type];
     const Icon = m.icon;
     return (
-      <Badge variant="amber">
+      <Badge variant="gold">
         <Icon className="h-3 w-3" /> {m.label}
       </Badge>
     );
   }
   if (isPaused(feature)) {
     return (
-      <Badge variant="amber" title="The last step finished but the next one did not start. Open the card and click Continue pipeline.">
+      <Badge variant="gold" title="The last step finished but the next one did not start. Open the card and click Continue pipeline.">
         <PauseCircle className="h-3 w-3" /> Paused
       </Badge>
     );
@@ -133,7 +141,11 @@ export function PipelineChip({ feature }: { feature: Feature }) {
     );
   }
   if (run && isActive(feature.agentStatus) && !(run.kind === 'feature' && run.role === 'developer' && run.cycle === 1 && run.attempt === 1)) {
-    return <Badge variant="violet">{runLabel(run)}</Badge>;
+    return (
+      <Badge variant="violet" dot>
+        {runLabel(run)}
+      </Badge>
+    );
   }
   return null;
 }

@@ -12,6 +12,7 @@ const DEFAULTS: Settings = {
   claudeBinary: process.env.ORCH_CLAUDE_BIN || 'claude',
   notifications: 'all',
   systemNotifications: process.platform === 'darwin',
+  autoStartBuild: true,
 };
 
 export function getSettings(): Settings {
@@ -48,6 +49,9 @@ export function updateSettings(patch: Partial<Settings>): Settings {
       stmt.run(k, JSON.stringify(v));
     } else if (k === 'systemNotifications') {
       stmt.run(k, JSON.stringify(v === true || v === 'true'));
+    } else if (k === 'autoStartBuild') {
+      if (typeof v !== 'boolean') continue;
+      stmt.run(k, JSON.stringify(v));
     } else if (k === 'effort') {
       if (!['', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(v))) continue;
       stmt.run(k, JSON.stringify(v));

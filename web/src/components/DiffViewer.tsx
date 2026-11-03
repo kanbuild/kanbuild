@@ -72,8 +72,8 @@ function FileDiff({
   const st = STATUS_STYLE[file.status];
   const lineId = (n: number | null) => (n !== null ? `diff-${index}-L${n}` : undefined);
   return (
-    <div id={`diff-${index}`} className="overflow-hidden rounded-lg border">
-      <button onClick={onToggle} className="sticky top-0 z-10 flex w-full items-center gap-2 border-b bg-muted/70 px-3 py-1.5 text-left font-mono text-xs backdrop-blur">
+    <div id={`diff-${index}`} className="metal-surface overflow-hidden rounded-xl">
+      <button onClick={onToggle} className="sticky top-0 z-10 flex w-full items-center gap-2 border-b bg-gradient-to-b from-[hsl(var(--metal-raised-hi))] to-[hsl(var(--metal-raised-lo))] px-3 py-1.5 text-left font-mono text-xs">
         {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
         <span className={cn('w-3 shrink-0 font-semibold', st.cls)}>{st.letter}</span>
         <span className="min-w-0 flex-1 truncate">
@@ -232,7 +232,7 @@ export function DiffViewer({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-xs">
-        <select className="h-7 max-w-[16rem] rounded-md border bg-background px-2 text-xs" value={scope} onChange={(e) => setScope(e.target.value)}>
+        <select className="metal-raised h-7 max-w-[16rem] cursor-pointer rounded-lg px-2 text-xs [&>option]:bg-background" value={scope} onChange={(e) => setScope(e.target.value)}>
           <option value="all">All changes (incl. uncommitted)</option>
           <option value="committed">Committed only</option>
           <option value="uncommitted">Uncommitted only</option>
@@ -242,11 +242,11 @@ export function DiffViewer({
             </option>
           ))}
         </select>
-        <div className="flex overflow-hidden rounded-md border">
-          <button className={cn('flex items-center gap-1 px-2 py-1', mode === 'unified' && 'bg-muted font-medium')} onClick={() => setMode('unified')} title="Unified view">
+        <div className="metal-inset flex overflow-hidden rounded-lg">
+          <button className={cn('flex items-center gap-1 px-2 py-1', mode === 'unified' && 'metal-raised font-medium')} onClick={() => setMode('unified')} title="Unified view">
             <Rows3 className="h-3.5 w-3.5" /> Unified
           </button>
-          <button className={cn('flex items-center gap-1 border-l px-2 py-1', mode === 'split' && 'bg-muted font-medium')} onClick={() => setMode('split')} title="Side-by-side view">
+          <button className={cn('flex items-center gap-1 border-l px-2 py-1', mode === 'split' && 'metal-raised font-medium')} onClick={() => setMode('split')} title="Side-by-side view">
             <Columns2 className="h-3.5 w-3.5" /> Split
           </button>
         </div>

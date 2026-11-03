@@ -116,7 +116,7 @@ Deleting a project cascades to its features, runs, run_events and dependencies.
 ## Key types (`shared/types.ts`)
 
 **Versioning**
-- `API_VERSION = 6` (line 7). Bump it when the backend and dashboard must change together.
+- `API_VERSION = 7` (line 7; 7 added `autoStartBuild`, `pipeline.autoStart` and `POST /features/:id/start`). Bump it when the backend and dashboard must change together.
 
 **Status and role enums**
 - `FeatureStatus` = `backlog | build | done`. This is the Kanban column.
@@ -148,6 +148,7 @@ Deleting a project cascades to its features, runs, run_events and dependencies.
   - `tester`, `reviewer`, `finalApproval`
   - `maxFixLoops` (per fix reason)
   - `autoCreatePr`, `prDraft`, `remote`
+  - `autoStart: boolean | null` (`null` = use the global `Settings.autoStartBuild`)
 - `RoleConfig {model, effort}` (`''` = inherit). `RolesConfig` = `Partial<Record<ClaudeRole, RoleConfig>>`.
 
 **Gates and results**

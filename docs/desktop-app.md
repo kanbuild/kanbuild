@@ -31,6 +31,7 @@ AI Orchestrator.app
    - Spawns the backend (`cwd` = home) and waits up to 30 s for `probe()` to see the orchestrator.
 4. `createWindow()` (main.ts:151):
    - Bounds are remembered in `<userData>/window-state.json`.
+   - `backgroundColor: '#0b0c0e'` matches the dashboard's dark `--background` token, so there is no flash before the page paints.
    - `setWindowOpenHandler` and `will-navigate` send every URL that is not the dashboard's own origin (`isLocalUrl`, env.ts:53) to `shell.openExternal`, such as GitHub PR links.
 5. The menu (`buildMenu`, main.ts:187) has the standard app/Edit/Window menus. View → *Open in Browser*. Help → *Show Backend Log* and *Open Data Folder*.
 
@@ -91,6 +92,7 @@ npm run test -w desktop # unit tests for env.ts
 
 - Only the backend's port matters. Set `ORCH_PORT` before launching the app to change it (the dashboard origin, and so its localStorage, follows the port).
 - If `npm start` is already running, the app reuses that backend, and quitting the app does not stop it.
+- The reverse does not work: `npm start` while the app (or its backend) is running exits with "A backend is already running at http://localhost:4317". Quit the app first, or set `ORCH_PORT`.
 - Logs: `~/Library/Logs/AI Orchestrator/server.log` (on Linux dev runs, `<userData>/logs/server.log`).
 - After upgrading the server's Node requirement, bump `NODE_VERSION` in `fetch-node.mjs`.
 - Electron is pinned exactly (`desktop/package.json`) because `electronVersion` is read from it.

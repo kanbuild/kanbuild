@@ -30,7 +30,11 @@ Any agent run that returns needs_clarification → [clarification gate] → answ
 
 ## Feature column (`FeatureStatus`)
 
-- **backlog → build**: `PATCH {status:'build'}` calls `startFeature`. `enqueueRun` also forces the card into build (orchestrator.ts:94).
+- **backlog → build**: `PATCH {status:'build'}` calls `enterBuild` (orchestrator.ts:88).
+  - With auto-start on (the project's `pipeline.autoStart`, else the global `autoStartBuild`), it calls `startFeature`.
+  - With auto-start off, the card waits in Build, **ready to start**: `agentStatus` is null, there is no gate and no new run. `tick()` only schedules queued runs, so it stays put. `isPaused` and `continuePipeline` need `agentStatus = completed`, so it never looks paused. `POST /features/:id/start` (the ▶ button) calls `startFeature`.
+  - Follow-ups, Retry, gate resolutions and Continue pipeline always start right away.
+  - `enqueueRun` also forces the card into build.
 - **build → done**: only `Orchestrator.complete()` (orchestrator.ts:751). It runs on a pipeline `done` decision or a final-approval approve.
 - **Manual move out of build**:
   - Needs `confirmCancel` if an agent is active; the run is then cancelled.

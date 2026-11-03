@@ -19,6 +19,7 @@ Source files: `server/src/settings.ts`, `server/src/projects.ts`, `server/src/fe
 | `claudeBinary` | `$ORCH_CLAUDE_BIN \|\| 'claude'` | the **env var always wins** |
 | `notifications` | `all` | `all`, `attention` or `off` |
 | `systemNotifications` | true on darwin | boolean |
+| `autoStartBuild` | true | boolean only. Off: a card moved into Build waits ("ready to start") until `POST /features/:id/start`. Projects can override with `pipeline.autoStart` |
 
 To add a setting:
 1. Add it to `DEFAULTS` and the validation in `updateSettings`.
@@ -65,6 +66,7 @@ To add a setting:
 **Override precedence** (resolved by `resolveLaunchConfig`, [orchestrator-and-agents.md](orchestrator-and-agents.md)):
 - role (`roles_json`) → project → global settings.
 - Project-level overrides: `model`, `agentProfile`, `effort`, `mcpConfig`, `allowedTools`, `mcpServers`, `skills`, `pipeline`, `roles`.
+- **Auto-start:** `autoStartFor(project)` (projects.ts) = `project.pipeline.autoStart ?? getSettings().autoStartBuild`. `cleanPipeline` keeps `true`, `false` or `null` and ignores other values; `undefined` keeps the base value. It lives in `pipeline_json`, so no migration was needed.
 
 ## Features (`features.ts`)
 

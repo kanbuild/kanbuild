@@ -18,6 +18,12 @@ export default {
         muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
         accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
         card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+        gold: { DEFAULT: 'hsl(var(--gold))', foreground: 'hsl(var(--gold-foreground))' },
+        metal: { DEFAULT: 'hsl(var(--metal-hi))', edge: 'hsl(var(--metal-edge))' },
+      },
+      boxShadow: {
+        glow: '0 0 0 1px hsl(var(--primary) / 0.45), 0 0 22px -4px hsl(var(--accent-glow))',
+        'gold-glow': '0 0 0 1px hsl(var(--gold) / 0.7), 0 0 18px -4px hsl(var(--gold) / 0.55)',
       },
       borderRadius: { lg: 'var(--radius)', md: 'calc(var(--radius) - 2px)', sm: 'calc(var(--radius) - 4px)' },
       keyframes: {

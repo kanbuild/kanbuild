@@ -9,7 +9,7 @@ import { notify } from './notify.ts';
 import { firstStep, nextStep, stepLabel, type StepRun } from './pipeline.ts';
 import { createPrForFeature } from './pr.ts';
 import { estimateCost, estimateCostByModel } from './pricing.ts';
-import { HttpError, getProject } from './projects.ts';
+import { HttpError, autoStartFor, getProject } from './projects.ts';
 import {
   buildAnswerPrompt,
   buildFixPrompt,
@@ -78,6 +78,19 @@ export class Orchestrator {
     const project = getProject(feature.projectId);
     const step = firstStep(project.pipeline, 'start');
     return this.enqueueRun(featureId, { ...step, cycle: latestCycle(featureId) + 1 });
+  }
+
+  /**
+   * Card moved into Build by the user. Starts a new cycle when auto-start is on (project override, else the global
+   * `autoStartBuild`). Otherwise the card waits in Build, "ready to start" (agentStatus null), until `startFeature`.
+   * currentRunId is kept so the previous cycles stay visible.
+   */
+  enterBuild(featureId: string, position?: number): Feature {
+    const feature = getFeature(featureId);
+    if (autoStartFor(getProject(feature.projectId))) return this.startFeature(featureId);
+    this.assertIdle(feature);
+    moveFeature(featureId, 'build', position);
+    return patchFeatureState(featureId, { agentStatus: null, gate: null });
   }
 
   /** Back-compat alias used by older callers/tests. */

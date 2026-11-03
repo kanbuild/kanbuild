@@ -1,10 +1,16 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Coins, GitBranch, GitPullRequest, Link2, Timer, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Coins, GitBranch, GitPullRequest, Link2, Play, Timer, Zap } from 'lucide-react';
 import type { Feature } from '@shared/types.ts';
 import { cn, formatCost, formatDuration, formatTokens } from '@/lib/utils';
 import { useNow } from '@/hooks';
-import { AgentStatusBadge, PipelineChip, isWaiting, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, runLabel, totalTokens } from './status';
+import { api } from '@/api';
+import { upsertFeature } from '@/store';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { toast, toastError } from './toast';
+import { AgentStatusBadge, PipelineChip, isReadyToStart, isWaiting, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, runLabel, totalTokens } from './status';
 
 export function FeatureCardView({ feature, dragging, onClick }: { feature: Feature; dragging?: boolean; onClick?: () => void }) {
   const run = feature.run;
@@ -14,19 +20,34 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
   const duration = runDurationMs(run, now);
   const blocked = feature.blockedBy.length > 0 && feature.status !== 'done';
   const multi = (feature.totals?.runs ?? 0) > 1;
+  const ready = isReadyToStart(feature);
+  const [starting, setStarting] = useState(false);
+  const start = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStarting(true);
+    try {
+      upsertFeature(await api.startFeature(feature.id));
+      toast(`Agent queued for "${feature.title}"`);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setStarting(false);
+    }
+  };
   return (
     <div
       onClick={onClick}
       className={cn(
-        'group cursor-pointer rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow hover:shadow-md',
-        dragging && 'rotate-1 shadow-lg ring-2 ring-sky-400/50',
-        feature.agentStatus === 'failed' && 'border-red-300 dark:border-red-900',
-        isWaiting(feature) && 'border-amber-400 ring-2 ring-amber-400/30 dark:border-amber-600',
+        'metal-surface sheen group relative cursor-pointer rounded-xl p-3 text-card-foreground transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-lg',
+        dragging && 'rotate-1 shadow-glow',
+        active && feature.agentStatus !== 'queued' && 'running-edge',
+        feature.agentStatus === 'failed' && 'border-red-300 dark:border-red-900/80',
+        isWaiting(feature) && 'shadow-gold-glow',
         blocked && feature.status === 'backlog' && 'border-dashed',
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium leading-snug">{feature.title}</h3>
+        <h3 className="text-sm font-medium leading-snug tracking-tight">{feature.title}</h3>
         <PriorityBadge priority={feature.priority} />
       </div>
       {feature.description && feature.status === 'backlog' && (
@@ -42,17 +63,37 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
         <div className="mt-2.5 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
-              {!isWaiting(feature) && <AgentStatusBadge status={feature.agentStatus} />}
+              {ready ? (
+                <Badge variant="gray" dot title="Auto-start is off for this project: press ▶ to start the agent">
+                  Ready to start
+                </Badge>
+              ) : (
+                !isWaiting(feature) && <AgentStatusBadge status={feature.agentStatus} />
+              )}
               <PipelineChip feature={feature} />
             </div>
-            {run && run.attempt > 1 && (
+            {ready && (
+              <Button
+                size="icon-round"
+                className="h-7 w-7 [&_svg]:size-3.5"
+                onClick={start}
+                onPointerDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                disabled={starting}
+                aria-label="Start build"
+                title="Start the agent"
+              >
+                <Play className="translate-x-px fill-current" />
+              </Button>
+            )}
+            {!ready && run && run.attempt > 1 && (
               <span className="text-[10px] text-muted-foreground" title={`Run #${run.attempt}, pipeline cycle ${run.cycle}`}>
                 {runLabel(run)} · #{run.attempt}
               </span>
             )}
           </div>
           {feature.agentStatus && <RunProgress feature={feature} run={run} />}
-          {feature.gate && run?.currentActivity && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{run.currentActivity}</p>}
+          {feature.gate && run?.currentActivity && <p className="text-xs font-medium text-amber-700 dark:text-[hsl(var(--gold))]">{run.currentActivity}</p>}
           {run?.currentActivity && active && (
             <p className="truncate text-xs text-muted-foreground" title={run.currentActivity}>
               {run.currentActivity}
@@ -106,7 +147,7 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/15 dark:border-emerald-800 dark:text-emerald-300"
             >
               <GitPullRequest className="h-3 w-3" /> PR #{feature.prNumber}
             </a>

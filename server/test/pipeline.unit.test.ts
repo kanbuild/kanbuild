@@ -98,6 +98,16 @@ describe('pipeline.nextStep', () => {
     expect(c.maxFixLoops).toBe(5);
     expect(c.remote).toBe('origin');
     expect(c.validationCommands).toEqual(['npm test']);
+    expect(c.autoStart).toBeNull();
+  });
+
+  it('keeps the autoStart override as true, false or null and ignores junk', () => {
+    expect(cleanPipeline({ autoStart: false }).autoStart).toBe(false);
+    expect(cleanPipeline({ autoStart: true }).autoStart).toBe(true);
+    const base = cleanPipeline({ autoStart: false });
+    expect(cleanPipeline({ autoStart: 'yes' }, base).autoStart).toBe(false);
+    expect(cleanPipeline({}, base).autoStart).toBe(false);
+    expect(cleanPipeline({ autoStart: null }, base).autoStart).toBeNull();
   });
 });
 
@@ -189,7 +199,7 @@ const project: Project = {
   agentProfile: '', effort: '', mcpConfig: '', mcpServers: [], skills: [], pipeline: DEFAULT_PIPELINE, roles: { reviewer: { model: 'sonnet', effort: 'low' } }, createdAt: '',
 };
 const settings: Settings = {
-  concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude', notifications: 'all', systemNotifications: false,
+  concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude', notifications: 'all', systemNotifications: false, autoStartBuild: true,
 };
 const feature: Feature = {
   id: 'f', projectId: 'p', title: 'Export', description: 'CSV', priority: 'low', status: 'build', position: 0, branch: null, worktreePath: null, sessionId: null,
