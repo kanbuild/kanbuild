@@ -1,24 +1,28 @@
 import type { ReactNode } from 'react';
 import {
   Apple,
-  ArrowUp,
+  Ban,
   Bell,
+  BookOpen,
   Bot,
   CheckCircle2,
-  ClipboardList,
-  Code2,
+  Circle,
+  ExternalLink,
   FileDiff,
-  FlaskConical,
+  FileText,
   GitBranch,
   GitPullRequest,
   Github,
   Heart,
   Laptop,
-  ScanSearch,
+  LayoutGrid,
+  Loader2,
+  Pencil,
   ShieldCheck,
   Star,
   Terminal,
   Workflow,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +33,7 @@ import { GITHUB_URL } from './config';
 
 /** The download button leads to the donate page, which starts the download itself. */
 const DOWNLOAD_HREF = './donate/?download=1';
+const GETTING_STARTED_HREF = './getting-started/';
 
 export function Home() {
   return (
@@ -41,7 +46,7 @@ export function Home() {
   );
 }
 
-/** Modeled on Emergent's prompt home: pill, chrome headline, metal composer with tab chips, suggestion chips. */
+/** Board-first hero: pill, chrome headline, then the board with an agent's detail sheet open over it. */
 function Hero() {
   return (
     <section>
@@ -52,7 +57,7 @@ function Hero() {
         <h1 className="chrome-text mt-6 max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl sm:leading-[1.05]">
           Drag a card.
           <br />
-          Ship a branch.
+          Ship a build.
         </h1>
         <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
           A local-first Kanban board for your git repos. Move a feature into <span className="font-medium text-foreground">Build</span> and Claude Code
@@ -70,116 +75,99 @@ function Hero() {
             </a>
           </Button>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">Apple silicon &amp; Intel · Needs git and the Claude Code CLI · Also runs in your browser</p>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Apple silicon &amp; Intel · Needs git and the Claude Code CLI · Also runs in your browser ·{' '}
+          <a href={GETTING_STARTED_HREF} className="font-medium text-primary hover:underline">
+            Getting started guide →
+          </a>
+        </p>
 
-        <ComposerMock />
-        <BoardMock />
+        <div className="mt-14 w-full max-w-6xl text-left">
+          <BoardMock />
+          <div className="relative z-10 flex flex-col gap-4 px-0 lg:-mt-14 lg:flex-row lg:items-start lg:gap-8 lg:px-8">
+            <div className="max-w-sm pt-2 lg:pt-24">
+              <span className="metal-raised inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" /> Live
+              </span>
+              <h2 className="mt-3 text-lg font-semibold tracking-tight">Open a card to watch its agent work</h2>
+              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+                Every step of the pipeline, each tool call and edit as it happens, tokens and an estimated cost. Step in at any checkpoint.
+              </p>
+            </div>
+            <AgentSheetMock />
+          </div>
+        </div>
       </Container>
     </section>
   );
 }
 
-const STEPS = [
-  { icon: ClipboardList, label: 'Plan' },
-  { icon: Code2, label: 'Develop' },
-  { icon: CheckCircle2, label: 'Validate' },
-  { icon: FlaskConical, label: 'Test' },
-  { icon: ScanSearch, label: 'Review' },
-  { icon: GitPullRequest, label: 'Open PR' },
-];
+type MockCard = {
+  title: string;
+  badge: ReactNode;
+  meta?: string;
+  progress?: number | null;
+  running?: boolean;
+  attention?: boolean;
+  selected?: boolean;
+  dashed?: boolean;
+};
 
-/** Static picture of the dashboard's feature composer (not an input). */
-function ComposerMock() {
-  return (
-    <div className="mt-14 w-full max-w-2xl text-left" aria-label="Feature composer preview">
-      <div className="flex gap-1 pl-3">
-        {['New feature', 'Follow-up', 'Bug fix'].map((t, i) => (
-          <span
-            key={t}
-            className={cn(
-              'inline-flex h-8 items-center rounded-t-xl px-3 text-xs font-medium',
-              i === 0 ? 'metal-surface border-b-0 text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {t}
-          </span>
-        ))}
-      </div>
-      <div className="metal-surface rounded-2xl p-4 shadow-glow">
-        <div className="text-sm font-medium">Add dark mode to the settings page</div>
-        <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-          Follow the OS by default, store the choice, and keep the existing tokens. Add a toggle next to the account menu.
-        </p>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <Badge variant="secondary">
-              <GitBranch className="h-3 w-3" /> main
-            </Badge>
-            <Badge variant="gray">priority: medium</Badge>
-          </div>
-          <span className="metal-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-            <ArrowUp className="h-4 w-4" />
-          </span>
-        </div>
-      </div>
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        {STEPS.map(({ icon: Icon, label }) => (
-          <span key={label} className="metal-raised inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground">
-            <Icon className="h-3.5 w-3.5 text-primary" /> {label}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-type MockCard = { title: string; badge: ReactNode; meta?: string; progress?: number | null; running?: boolean; attention?: boolean };
-
-const COLUMNS: { name: string; count: number; cards: MockCard[] }[] = [
+const COLUMNS: { name: string; hint: string; cards: MockCard[] }[] = [
   {
     name: 'Backlog',
-    count: 2,
+    hint: 'Drag a card into Build to start an agent',
     cards: [
-      { title: 'Dark mode toggle', badge: <Badge variant="gray" dot>backlog</Badge>, meta: 'priority: medium' },
-      { title: 'CSV export for reports', badge: <Badge variant="gray" dot>blocked</Badge>, meta: 'depends on: Reports API' },
+      { title: 'Dark mode for the settings page', badge: <Badge variant="gray" dot>medium</Badge>, meta: 'Follow the OS, store the choice' },
+      { title: 'CSV export for reports', badge: <Badge variant="gray" dot>low</Badge>, meta: 'Waits for Reports API', dashed: true },
+      { title: 'Onboarding email sequence', badge: <Badge variant="gray" dot>low</Badge>, meta: 'Three emails over the first week' },
     ],
   },
   {
     name: 'Build',
-    count: 2,
+    hint: '1 running · 2 waiting · limit 2 concurrent',
     cards: [
-      { title: 'Reports API', badge: <Badge variant="blue" dot>running</Badge>, meta: 'Develop · #1 · 48.2k tok · est. $0.41', progress: null, running: true },
-      { title: 'OAuth login', badge: <Badge variant="amber" dot>approve plan</Badge>, meta: 'Plan ready for review', attention: true },
+      { title: 'Reports API', badge: <Badge variant="blue" dot>running</Badge>, meta: 'Develop · #2 · 10.5k tok · est. ~$0.07', progress: null, running: true, selected: true },
+      { title: 'OAuth login with GitHub', badge: <Badge variant="gold">Approve plan</Badge>, meta: 'Waiting for plan approval', attention: true },
+      { title: 'Invoice PDF download', badge: <Badge variant="gold">Awaiting approval</Badge>, meta: 'Validated · tested · reviewed', attention: true, progress: 100 },
     ],
   },
   {
     name: 'Done',
-    count: 1,
-    cards: [{ title: 'Rate limiting', badge: <Badge variant="green" dot>done</Badge>, meta: 'PR #42 opened', progress: 100 }],
+    hint: 'Completed features ready for review',
+    cards: [
+      { title: 'Rate limiting for the public API', badge: <Badge variant="green" dot>done</Badge>, meta: 'PR #42 opened', progress: 100 },
+      { title: 'Audit log for admin actions', badge: <Badge variant="green" dot>done</Badge>, meta: 'PR #39 merged by you', progress: 100 },
+    ],
   },
 ];
 
+/** Static picture of the dashboard's board. The extra bottom padding on lg is where the agent sheet overlaps it. */
 function BoardMock() {
   return (
-    <div className="metal-glass mt-16 w-full max-w-5xl rounded-3xl p-3 text-left sm:p-4" aria-label="Kanbuild board preview">
+    <div className="metal-glass w-full rounded-3xl p-3 shadow-glow sm:p-4 lg:pb-20" aria-label="Kanbuild board preview">
       <div className="mb-3 flex flex-wrap items-center gap-2 px-1">
-        <span className="metal-raised inline-flex h-7 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold">
+        <span className="metal-accent inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold">
+          <LayoutGrid className="h-3.5 w-3.5" /> Board
+        </span>
+        <span className="metal-raised inline-flex h-7 items-center gap-2 rounded-full px-3 text-xs font-semibold">
           <span className="h-1.5 w-1.5 rounded-full bg-primary" /> acme-web
         </span>
-        <span className="metal-raised inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 font-mono text-[11px] text-muted-foreground">
-          <GitBranch className="h-3 w-3 text-primary" /> main
+        <span className="metal-raised hidden h-7 items-center gap-1.5 rounded-full px-2.5 font-mono text-[11px] text-muted-foreground sm:inline-flex">
+          <GitBranch className="h-3 w-3 text-primary" /> base main
         </span>
         <Badge variant="gold" className="ml-auto">
-          est. ~$1.27
+          est. ~$0.48
         </Badge>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {COLUMNS.map((col) => (
           <div key={col.name} className="metal-inset rounded-2xl p-2">
-            <div className="mb-2 flex items-center justify-between px-1.5 pt-0.5">
+            <div className="flex items-center justify-between px-1.5 pt-0.5">
               <span className="text-xs font-semibold">{col.name}</span>
-              <span className="text-[10px] text-muted-foreground">{col.count}</span>
+              <span className="text-[10px] text-muted-foreground">{col.cards.length}</span>
             </div>
+            <div className="mb-2 truncate px-1.5 text-[10px] text-muted-foreground">{col.hint}</div>
             <div className="space-y-2">
               {col.cards.map((c) => (
                 <div
@@ -187,7 +175,9 @@ function BoardMock() {
                   className={cn(
                     'metal-surface relative rounded-xl p-2.5',
                     c.running && 'running-edge',
-                    c.attention && 'ring-1 ring-amber-400/70',
+                    c.attention && 'shadow-gold-glow ring-1 ring-amber-400/70',
+                    c.selected && 'ring-2 ring-primary/70',
+                    c.dashed && 'border-dashed',
                   )}
                 >
                   <div className="mb-1.5 flex flex-wrap items-center gap-1">{c.badge}</div>
@@ -195,7 +185,7 @@ function BoardMock() {
                   {c.meta && <div className="mt-1 text-[10px] text-muted-foreground">{c.meta}</div>}
                   {c.progress !== undefined && (
                     <div className="mt-2">
-                      <Progress value={c.progress} tone={c.progress === 100 ? 'green' : 'default'} />
+                      <Progress value={c.progress} tone={c.progress === 100 ? (c.attention ? 'default' : 'green') : 'default'} />
                     </div>
                   )}
                 </div>
@@ -203,6 +193,144 @@ function BoardMock() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+type StepState = 'done' | 'active' | 'todo';
+const PIPELINE: { label: string; state: StepState }[] = [
+  { label: 'Plan', state: 'done' },
+  { label: 'Approve plan', state: 'done' },
+  { label: 'Develop', state: 'active' },
+  { label: 'Validate', state: 'todo' },
+  { label: 'Tests', state: 'todo' },
+  { label: 'Review', state: 'todo' },
+  { label: 'Your approval', state: 'todo' },
+];
+
+const ACTIVITY: { time: string; icon: typeof Bot; text: string; tool?: boolean; ok?: boolean }[] = [
+  { time: '11:05:22', icon: Bot, text: 'Reusing worktree feature-reports-api (branch feature/reports-api)' },
+  { time: '11:05:23', icon: FileText, text: 'Read src/reports.js', tool: true },
+  { time: '11:05:31', icon: Pencil, text: 'Edit src/reports.js  +38 −4', tool: true, ok: true },
+  { time: '11:05:44', icon: Pencil, text: 'Write src/routes/reports.ts', tool: true, ok: true },
+  { time: '11:05:52', icon: Terminal, text: 'Bash npm test -- reports', tool: true },
+];
+
+const SHEET_TABS = ['Overview', 'Pipeline', 'Activity', 'Changes', 'Tests', 'Report', 'Terminal'];
+
+/** Static picture of the detail sheet for the running "Reports API" card. */
+function AgentSheetMock() {
+  return (
+    <div
+      className="metal-surface w-full min-w-0 overflow-hidden rounded-3xl shadow-2xl lg:flex-1"
+      aria-label="Agent detail preview"
+    >
+      <div className="border-b border-border/60 p-4">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="red" dot>
+            High
+          </Badge>
+          <Badge variant="blue">
+            <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" /> Running
+          </Badge>
+          <Badge variant="violet" dot>
+            Develop
+          </Badge>
+          <span className="text-[11px] text-muted-foreground">Developer · run #2</span>
+          <span className="metal-raised ml-auto flex h-6 w-6 items-center justify-center rounded-full">
+            <X className="h-3 w-3 text-muted-foreground" />
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-semibold">Reports API</h3>
+          <span className="metal-raised inline-flex h-6 items-center gap-1 rounded-full px-2 font-mono text-[10px] text-muted-foreground">
+            <GitBranch className="h-3 w-3 text-primary" /> feature/reports-api
+          </span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {[
+            { icon: Ban, label: 'Cancel agent' },
+            { icon: ExternalLink, label: 'Open in editor' },
+          ].map(({ icon: Icon, label }) => (
+            <span key={label} className="metal-raised inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium">
+              <Icon className="h-3.5 w-3.5" /> {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4">
+        <div className="flex flex-wrap items-center gap-1">
+          {PIPELINE.map((s, i) => (
+            <span key={s.label} className="flex items-center gap-1">
+              <span
+                className={cn(
+                  'inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-medium',
+                  s.state === 'done' && 'metal-raised border-transparent text-foreground',
+                  s.state === 'active' && 'border-primary/70 bg-primary/10 text-foreground shadow-glow',
+                  s.state === 'todo' && 'border-dashed border-border text-muted-foreground',
+                )}
+              >
+                {s.state === 'done' ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                ) : s.state === 'active' ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-primary motion-reduce:animate-none" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                {s.label}
+              </span>
+              {i < PIPELINE.length - 1 && <span className="h-px w-2 bg-border" />}
+            </span>
+          ))}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>Implementing · Writing src/routes/reports.ts</span>
+          <span>40%</span>
+        </div>
+        <div className="mt-1.5">
+          <Progress value={40} />
+        </div>
+
+        <div className="mt-4 flex gap-3 overflow-hidden border-b border-border/60 text-[11px]">
+          {SHEET_TABS.map((t) => (
+            <span key={t} className={cn('shrink-0 pb-1.5', t === 'Activity' ? 'border-b-2 border-primary font-semibold text-foreground' : 'text-muted-foreground')}>
+              {t}
+            </span>
+          ))}
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {ACTIVITY.map((a, i) => (
+            <div
+              key={a.time + a.text}
+              className={cn(
+                'flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 font-mono text-[10.5px]',
+                a.tool ? 'metal-raised' : 'text-violet-600 dark:text-violet-300',
+              )}
+            >
+              <span className="shrink-0 text-muted-foreground">{a.time}</span>
+              {a.ok ? <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" /> : <a.icon className="h-3 w-3 shrink-0 text-primary" />}
+              <span className="truncate">{a.text}</span>
+              {i === ACTIVITY.length - 1 && <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            ['Duration', '0:41'],
+            ['New tokens', '10.5k'],
+            ['Est. cost', '~$0.07'],
+            ['Turns', '7'],
+          ].map(([k, v]) => (
+            <div key={k} className="metal-inset rounded-xl px-2.5 py-2">
+              <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{k}</div>
+              <div className="mt-0.5 text-sm font-semibold">{v}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -296,6 +424,13 @@ function Download() {
               </a>
             </Button>
           </div>
+        </div>
+        <div className="mt-8 flex justify-center">
+          <Button asChild variant="chrome">
+            <a href={GETTING_STARTED_HREF}>
+              <BookOpen /> Read the getting started guide
+            </a>
+          </Button>
         </div>
       </Container>
     </section>

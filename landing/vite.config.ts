@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
-// Static multi-page site: `/` (home) and `/donate/`. `base: './'` keeps every
+// Static multi-page site: `/` (home), `/getting-started/` and `/donate/`. `base: './'` keeps every
 // link relative, so the build works from any host or sub-path.
 export default defineConfig({
   base: './',
@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, 'index.html'),
         donate: path.resolve(__dirname, 'donate/index.html'),
+        gettingStarted: path.resolve(__dirname, 'getting-started/index.html'),
       },
     },
   },

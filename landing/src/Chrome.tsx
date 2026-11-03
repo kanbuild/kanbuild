@@ -35,6 +35,9 @@ function Nav({ home }: { home: string }) {
             <a href={`${home}#features`}>Features</a>
           </Button>
           <Button asChild variant="ghost" size="pill" className="hidden sm:inline-flex">
+            <a href={`${home}getting-started/`}>Get started</a>
+          </Button>
+          <Button asChild variant="ghost" size="pill" className="hidden sm:inline-flex">
             <a href={`${home}#download`}>Download</a>
           </Button>
           <ThemeToggle />
@@ -90,6 +93,9 @@ function Footer({ home }: { home: string }) {
           <span>Kanbuild · MIT licensed · costs shown in the app are estimates</span>
         </div>
         <div className="flex items-center gap-4">
+          <a href={`${home}getting-started/`} className="hover:text-foreground">
+            Get started
+          </a>
           <a href={`${home}donate/`} className="hover:text-foreground">
             Donate
           </a>
