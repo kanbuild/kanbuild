@@ -14,7 +14,7 @@ export function setClientCounter(fn: () => number) {
 
 /** osascript arguments for a macOS notification banner. */
 export function systemNotificationArgs(title: string, body: string): string[] {
-  return ['-e', `display notification ${appleScriptString(body.slice(0, 240))} with title ${appleScriptString('AI Orchestrator')} subtitle ${appleScriptString(title.slice(0, 120))}`];
+  return ['-e', `display notification ${appleScriptString(body.slice(0, 240))} with title ${appleScriptString('Kanbuild')} subtitle ${appleScriptString(title.slice(0, 120))}`];
 }
 
 export function shouldNotify(mode: 'all' | 'attention' | 'off', level: AppNotification['level']): boolean {

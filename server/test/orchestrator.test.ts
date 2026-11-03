@@ -166,4 +166,45 @@ describe('end-to-end orchestration with a fake Claude Code', () => {
     expect(report.self.docsUpdated).toEqual(['agent-docs/features.md']);
     expect(report.changes.commits.length).toBe(2);
   }, 60000);
+
+  it('waits in Build for an explicit start when auto-start is off', async () => {
+    const { projects, features, settings, runs, orch } = mods;
+    process.env.FAKE_CLAUDE_DELAY_MS = '100';
+    const project = projects.listProjects()[0];
+    settings.updateSettings({ autoStartBuild: false });
+    try {
+      const f = features.createFeature(project.id, { title: 'Manual start' });
+      const ready = orch.orchestrator.enterBuild(f.id);
+      expect(ready.status).toBe('build');
+      expect(ready.agentStatus).toBeNull();
+      expect(runs.listRunsForFeature(f.id)).toHaveLength(0);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(runs.listRunsForFeature(f.id)).toHaveLength(0); // tick() never picks it up
+
+      // The project override beats the global setting.
+      projects.updateProject(project.id, { pipeline: { autoStart: true } });
+      expect(projects.getProject(project.id).pipeline.autoStart).toBe(true);
+      const auto = features.createFeature(project.id, { title: 'Override starts' });
+      expect(orch.orchestrator.enterBuild(auto.id).agentStatus).toBe('queued');
+      projects.updateProject(project.id, { pipeline: { autoStart: null } });
+
+      // ▶ starts the waiting card, and it runs to Done.
+      expect(orch.orchestrator.startFeature(f.id).agentStatus).toBe('queued');
+      const done = await waitFor(() => {
+        const x = features.getFeature(f.id);
+        return x.status === 'done' && x;
+      }, 30000);
+      expect(done.agentStatus).toBe('completed');
+      await waitFor(() => features.getFeature(auto.id).status === 'done', 30000);
+
+      // Done -> Build with auto-start off waits again instead of starting a new cycle.
+      const back = orch.orchestrator.enterBuild(f.id);
+      expect(back.status).toBe('build');
+      expect(back.agentStatus).toBeNull();
+      expect(back.currentRunId).toBe(done.currentRunId);
+      expect(runs.listRunsForFeature(f.id)).toHaveLength(1);
+    } finally {
+      settings.updateSettings({ autoStartBuild: true });
+    }
+  }, 60000);
 });

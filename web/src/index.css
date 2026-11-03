@@ -2,61 +2,285 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Metallic design system, modeled on Emergent ("Build apps with AI"):
+ * atmospheric backdrops, brushed-metal surfaces with an inset top highlight,
+ * chrome buttons, an accent (cyan in dark, blue in light) and gold "credits" pills.
+ * All colors are HSL triplets so Tailwind can apply alpha (`bg-primary/20`).
+ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 220 20% 97%;
+    --foreground: 222 22% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --card-foreground: 222 22% 11%;
+    --primary: 214 88% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 93%;
+    --secondary-foreground: 222 22% 14%;
+    --muted: 220 16% 93%;
+    --muted-foreground: 220 9% 44%;
+    --accent: 220 16% 92%;
+    --accent-foreground: 222 22% 11%;
     --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.6rem;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 14% 86%;
+    --input: 220 14% 84%;
+    --ring: 214 88% 52%;
+    --radius: 0.75rem;
+
+    /* metal */
+    --metal-hi: 0 0% 100%;
+    --metal-lo: 220 18% 94%;
+    --metal-raised-hi: 0 0% 100%;
+    --metal-raised-lo: 220 15% 89%;
+    --metal-inset-hi: 220 18% 95%;
+    --metal-inset-lo: 0 0% 100%;
+    --metal-edge: 220 14% 82%;
+    --metal-highlight: 0 0% 100% / 0.95;
+    --metal-shade: 220 30% 20% / 0.08;
+    --sheen: 0 0% 100% / 0.55;
+    --accent-hi: 210 95% 60%;
+    --accent-lo: 218 85% 47%;
+    --accent-glow: 214 88% 52% / 0.28;
+    --gold: 45 96% 58%;
+    --gold-hi: 50 100% 72%;
+    --gold-lo: 40 92% 50%;
+    --gold-foreground: 30 40% 12%;
+    --chrome-hi: 222 14% 26%;
+    --chrome-lo: 222 18% 12%;
+    --chrome-foreground: 0 0% 98%;
+    --chrome-text-from: 222 25% 14%;
+    --chrome-text-via: 220 12% 38%;
+    --chrome-text-to: 214 88% 48%;
+    --scrollbar: 220 10% 75%;
   }
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 8% 7%;
-    --card-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --background: 220 12% 5%;
+    --foreground: 210 15% 94%;
+    --card: 220 9% 9%;
+    --card-foreground: 210 15% 94%;
+    --primary: 176 80% 62%;
+    --primary-foreground: 190 60% 8%;
+    --secondary: 220 8% 14%;
+    --secondary-foreground: 210 15% 94%;
+    --muted: 220 8% 13%;
+    --muted-foreground: 220 8% 62%;
+    --accent: 220 8% 15%;
+    --accent-foreground: 210 15% 94%;
+    --destructive: 0 68% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 8% 17%;
+    --input: 220 8% 20%;
+    --ring: 176 80% 62%;
+
+    --metal-hi: 220 8% 12.5%;
+    --metal-lo: 220 9% 8%;
+    --metal-raised-hi: 220 7% 22%;
+    --metal-raised-lo: 220 8% 13%;
+    --metal-inset-hi: 220 10% 5.5%;
+    --metal-inset-lo: 220 8% 9%;
+    --metal-edge: 220 7% 21%;
+    --metal-highlight: 0 0% 100% / 0.09;
+    --metal-shade: 0 0% 0% / 0.45;
+    --sheen: 0 0% 100% / 0.07;
+    --accent-hi: 172 85% 72%;
+    --accent-lo: 186 75% 52%;
+    --accent-glow: 176 80% 62% / 0.3;
+    --gold: 45 96% 60%;
+    --gold-hi: 50 100% 74%;
+    --gold-lo: 40 90% 50%;
+    --gold-foreground: 30 40% 10%;
+    --chrome-hi: 220 6% 30%;
+    --chrome-lo: 220 7% 17%;
+    --chrome-foreground: 0 0% 98%;
+    --chrome-text-from: 0 0% 98%;
+    --chrome-text-via: 210 20% 80%;
+    --chrome-text-to: 172 85% 68%;
+    --scrollbar: 220 6% 26%;
   }
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
   * { @apply border-border; }
-  body { @apply bg-background text-foreground antialiased; font-feature-settings: 'cv11', 'ss01'; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  * { scrollbar-width: thin; scrollbar-color: hsl(var(--scrollbar)) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, hsl(var(--scrollbar)), hsl(var(--scrollbar) / 0.7));
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
 }
 
-.prose-report h1 { @apply text-xl font-semibold mb-3; }
+@layer components {
+  /* Page background: soft "clouds" (smoke in dark, sky in light). Pure CSS, works offline. */
+  .app-backdrop {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(60% 45% at 18% -5%, hsl(205 95% 72% / 0.45), transparent 70%),
+      radial-gradient(45% 35% at 85% 0%, hsl(200 90% 80% / 0.5), transparent 70%),
+      radial-gradient(35% 22% at 55% 8%, hsl(0 0% 100% / 0.9), transparent 70%),
+      radial-gradient(30% 20% at 30% 14%, hsl(0 0% 100% / 0.75), transparent 70%),
+      linear-gradient(180deg, hsl(208 85% 90%) 0%, hsl(var(--background)) 38%);
+    background-attachment: fixed;
+  }
+  .dark .app-backdrop {
+    background-image:
+      radial-gradient(55% 40% at 15% -5%, hsl(220 6% 34% / 0.45), transparent 70%),
+      radial-gradient(45% 35% at 82% 2%, hsl(220 5% 30% / 0.42), transparent 70%),
+      radial-gradient(30% 18% at 60% 14%, hsl(220 5% 40% / 0.18), transparent 70%),
+      radial-gradient(35% 25% at 50% 12%, hsl(176 60% 40% / 0.1), transparent 70%),
+      radial-gradient(40% 30% at 30% 22%, hsl(220 6% 26% / 0.35), transparent 70%),
+      linear-gradient(180deg, hsl(220 8% 9%) 0%, hsl(var(--background)) 45%);
+  }
+
+  /* Brushed metal card / panel */
+  .metal-surface {
+    background-image: linear-gradient(180deg, hsl(var(--metal-hi)), hsl(var(--metal-lo)));
+    border: 1px solid hsl(var(--metal-edge));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--metal-highlight)),
+      0 1px 2px hsl(var(--metal-shade)),
+      0 4px 14px -6px hsl(var(--metal-shade));
+  }
+  .metal-glass {
+    background-image: linear-gradient(180deg, hsl(var(--metal-hi) / 0.72), hsl(var(--metal-lo) / 0.6));
+    border: 1px solid hsl(var(--metal-edge) / 0.8);
+    box-shadow: inset 0 1px 0 hsl(var(--metal-highlight));
+    backdrop-filter: blur(14px) saturate(1.2);
+  }
+
+  /* Chrome button body */
+  .metal-raised {
+    background-image: linear-gradient(180deg, hsl(var(--metal-raised-hi)), hsl(var(--metal-raised-lo)));
+    border: 1px solid hsl(var(--metal-edge));
+    color: hsl(var(--foreground));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--metal-highlight)),
+      inset 0 -1px 0 hsl(var(--metal-shade)),
+      0 1px 2px hsl(var(--metal-shade));
+  }
+  .metal-raised:hover { filter: brightness(1.06); }
+  .dark .metal-raised:hover { filter: brightness(1.18); }
+  .metal-raised:active { box-shadow: inset 0 1px 3px hsl(var(--metal-shade)); filter: none; }
+
+  /* Recessed input well */
+  .metal-inset {
+    background-image: linear-gradient(180deg, hsl(var(--metal-inset-hi)), hsl(var(--metal-inset-lo)));
+    border: 1px solid hsl(var(--input));
+    box-shadow: inset 0 1px 2px hsl(var(--metal-shade)), 0 1px 0 hsl(var(--metal-highlight));
+  }
+
+  /* Accent (primary) — glossy cyan / blue */
+  .metal-accent {
+    background-image:
+      linear-gradient(180deg, hsl(0 0% 100% / 0.28), hsl(0 0% 100% / 0) 55%),
+      linear-gradient(180deg, hsl(var(--accent-hi)), hsl(var(--accent-lo)));
+    border: 1px solid hsl(var(--accent-lo));
+    color: hsl(var(--primary-foreground));
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.4),
+      0 1px 2px hsl(var(--metal-shade)),
+      0 4px 16px -4px hsl(var(--accent-glow));
+  }
+  .metal-accent:hover { filter: brightness(1.07); }
+  .metal-accent:active { filter: brightness(0.95); }
+
+  /* Gold "credits" pill — attention / waiting */
+  .metal-gold {
+    background-image:
+      linear-gradient(180deg, hsl(0 0% 100% / 0.35), hsl(0 0% 100% / 0) 60%),
+      linear-gradient(180deg, hsl(var(--gold-hi)), hsl(var(--gold-lo)));
+    border: 1px solid hsl(var(--gold-lo));
+    color: hsl(var(--gold-foreground));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.5), 0 2px 10px -4px hsl(var(--gold) / 0.55);
+  }
+  .metal-gold:hover { filter: brightness(1.05); }
+
+  /* Graphite chrome pill (Share / Discount) */
+  .metal-chrome {
+    background-image: linear-gradient(180deg, hsl(var(--chrome-hi)), hsl(var(--chrome-lo)));
+    border: 1px solid hsl(var(--chrome-lo));
+    color: hsl(var(--chrome-foreground));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.16), 0 1px 3px hsl(var(--metal-shade));
+  }
+  .metal-chrome:hover { filter: brightness(1.15); }
+
+  .metal-danger {
+    background-image:
+      linear-gradient(180deg, hsl(0 0% 100% / 0.22), hsl(0 0% 100% / 0) 55%),
+      linear-gradient(180deg, hsl(0 80% 60%), hsl(0 70% 46%));
+    border: 1px solid hsl(0 70% 42%);
+    color: hsl(0 0% 100%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 4px 14px -6px hsl(0 80% 50% / 0.5);
+  }
+  .metal-danger:hover { filter: brightness(1.07); }
+
+  /* Silver → accent gradient headline */
+  .chrome-text {
+    background-image: linear-gradient(100deg, hsl(var(--chrome-text-from)) 0%, hsl(var(--chrome-text-via)) 45%, hsl(var(--chrome-text-to)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Diagonal light sweep on hover */
+  .sheen { position: relative; overflow: hidden; isolation: isolate; }
+  .sheen::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 30%, hsl(var(--sheen)) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+    z-index: 1;
+  }
+  .sheen:hover::after { transform: translateX(120%); }
+
+  /* Thin animated accent line along the top of a running card */
+  .running-edge::before {
+    content: '';
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 0;
+    height: 2px;
+    z-index: 2;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
+    background-size: 200% 100%;
+    animation: edge-flow 2.4s linear infinite;
+  }
+  @keyframes edge-flow {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sheen::after { display: none; }
+    .running-edge::before { animation: none; }
+  }
+}
+
+.prose-report h1 { @apply text-xl font-semibold mb-3 tracking-tight; }
 .prose-report h2 { @apply text-base font-semibold mt-5 mb-2; }
 .prose-report p { @apply text-sm leading-6 mb-2; }
 .prose-report ul { @apply list-disc pl-5 text-sm mb-2 space-y-0.5; }
-.prose-report code { @apply font-mono text-xs bg-muted rounded px-1 py-0.5; }
-.prose-report pre { @apply bg-muted rounded-md p-3 overflow-x-auto text-xs mb-2; }
-.prose-report pre code { @apply bg-transparent p-0; }
-.prose-report blockquote { @apply border-l-2 pl-3 text-sm text-muted-foreground; }
+.prose-report code { @apply font-mono text-xs rounded-md px-1 py-0.5 metal-inset; }
+.prose-report pre { @apply rounded-xl p-3 overflow-x-auto text-xs mb-2 metal-inset; }
+.prose-report pre code { @apply bg-transparent bg-none border-0 shadow-none p-0; }
+.prose-report blockquote { @apply border-l-2 border-primary/50 pl-3 text-sm text-muted-foreground; }
 .prose-report h3 { @apply text-sm font-semibold mt-4 mb-1.5; }
 .prose-report ol { @apply list-decimal pl-5 text-sm mb-2 space-y-0.5; }
 .prose-report li > p { @apply mb-0; }
 .prose-report table { @apply w-full border-collapse text-xs mb-3; }
 .prose-report th { @apply border bg-muted px-2 py-1 text-left font-medium; }
 .prose-report td { @apply border px-2 py-1 align-top; }
+.prose-report a { @apply text-primary underline-offset-2 hover:underline; }

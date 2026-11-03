@@ -30,6 +30,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [claudeBinary, setClaudeBinary] = useState('claude');
   const [notifications, setNotifications] = useState<'all' | 'attention' | 'off'>('all');
   const [systemNotifications, setSystemNotifications] = useState(false);
+  const [autoStartBuild, setAutoStartBuild] = useState(true);
   const [permission, setPermission] = useState(browserPermission());
   const [github, setGithub] = useState<(GithubStatus & { error?: string }) | null>(null);
   const [token, setToken] = useState('');
@@ -51,6 +52,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       setClaudeBinary(settings.claudeBinary);
       setNotifications(settings.notifications);
       setSystemNotifications(settings.systemNotifications);
+      setAutoStartBuild(settings.autoStartBuild ?? true);
       setPermission(browserPermission());
     }
   }, [open, settings]);
@@ -89,7 +91,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     e.preventDefault();
     try {
       const editorCommand = editorPreset === 'custom' ? customEditor.trim() : editorPreset;
-      setSettings(await api.updateSettings({ concurrency, agentProfile, effort, maxBudgetUsd, defaultModel, editorCommand, claudeBinary, notifications, systemNotifications }));
+      setSettings(await api.updateSettings({ concurrency, agentProfile, effort, maxBudgetUsd, defaultModel, editorCommand, claudeBinary, notifications, systemNotifications, autoStartBuild }));
       onOpenChange(false);
     } catch (err) {
       toastError(err);
@@ -128,6 +130,13 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <Input type="number" min={1} max={16} value={concurrency} onChange={(e) => setConcurrency(Number(e.target.value))} />
             </Field>
           </div>
+          <label className="metal-raised flex cursor-pointer items-start gap-2.5 rounded-xl p-3 hover:filter-none">
+            <input type="checkbox" className="mt-0.5" checked={autoStartBuild} onChange={(e) => setAutoStartBuild(e.target.checked)} />
+            <span>
+              <span className="block text-sm font-medium">Start the agent automatically when a card is moved into Build</span>
+              <span className="block text-[11px] text-muted-foreground">Off: cards wait in Build until you press ▶. Projects can override this in Project settings → Pipeline.</span>
+            </span>
+          </label>
           <Field label="Default model" hint="Used when a project has no model override. Empty = Claude Code default (e.g. opus, sonnet).">
             <Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} placeholder="default" className="font-mono text-xs" />
           </Field>
@@ -149,7 +158,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Field label="Claude Code binary">
             <Input value={claudeBinary} onChange={(e) => setClaudeBinary(e.target.value)} className="font-mono text-xs" />
           </Field>
-          <fieldset className="space-y-2 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-2 rounded-xl p-3">
             <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold">
               <Bell className="h-3.5 w-3.5" /> Notifications
             </legend>
@@ -182,7 +191,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             )}
             <p className="text-[11px] text-muted-foreground">Shown as a desktop notification when this tab is in the background, otherwise as a toast.</p>
           </fieldset>
-          <fieldset className="space-y-2 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-2 rounded-xl p-3">
             <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold">
               <Github className="h-3.5 w-3.5" /> GitHub
             </legend>

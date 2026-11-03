@@ -87,21 +87,21 @@ export function BranchSwitcher({ project }: { project: Project }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'inline-flex max-w-[16rem] items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-          open && 'bg-accent text-accent-foreground',
+          'metal-raised inline-flex h-7 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-full px-2.5 font-mono text-[11px] text-muted-foreground transition-[filter,box-shadow,color] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+          open && 'text-foreground shadow-glow',
         )}
         title="Base branch: new feature branches start here. Click to change."
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <GitBranch className="h-3 w-3 shrink-0" />
+        <GitBranch className="h-3 w-3 shrink-0 text-primary" />
         <span className="truncate">{project.baseBranch}</span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border bg-background p-2 text-foreground shadow-md">
+        <div className="metal-surface absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl p-2 text-foreground">
           <div className="px-1 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Base branch</div>
-          <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter branches…" className="h-8 text-xs" />
+          <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter branches…" className="metal-inset h-8 text-xs" />
           <div className="mt-2 max-h-64 overflow-y-auto" role="listbox">
             {loading && !branches ? (
               <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
@@ -118,12 +118,15 @@ export function BranchSwitcher({ project }: { project: Project }) {
                   aria-selected={b === project.baseBranch}
                   disabled={saving !== null}
                   onClick={() => choose(b)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent disabled:opacity-60"
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06] disabled:opacity-60',
+                    b === project.baseBranch && 'metal-raised',
+                  )}
                 >
                   {saving === b ? (
                     <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                   ) : (
-                    <Check className={cn('h-3.5 w-3.5 shrink-0', b === project.baseBranch ? 'opacity-100' : 'opacity-0')} />
+                    <Check className={cn('h-3.5 w-3.5 shrink-0 text-primary', b === project.baseBranch ? 'opacity-100' : 'opacity-0')} />
                   )}
                   <span className="min-w-0 flex-1 truncate font-mono">{b}</span>
                   {b === checkedOut && <span className="shrink-0 text-[10px] text-muted-foreground">checked out</span>}

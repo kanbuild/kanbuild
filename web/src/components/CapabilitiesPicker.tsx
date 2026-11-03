@@ -30,7 +30,7 @@ const matches = (q: string, ...fields: (string | undefined)[]) => {
 
 function Row({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
-    <label className={cn('flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50', checked && 'bg-sky-50 dark:bg-sky-950/40')}>
+    <label className={cn('flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-foreground/[0.04]', checked && 'bg-primary/10')}>
       <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="min-w-0 flex-1">{children}</span>
     </label>
@@ -110,7 +110,7 @@ export function CapabilitiesPicker({
       : 'Nothing selected: the full profile loads every installed skill (asking for permission to use them).';
 
   return (
-    <fieldset className="space-y-3 rounded-lg border p-3">
+    <fieldset className="metal-surface space-y-3 rounded-xl p-3">
       <legend className="px-1 text-sm font-semibold">MCP servers &amp; skills</legend>
       <p className="text-[11px] text-muted-foreground">
         Discovered from your local Claude Code: <span className="font-mono">~/.claude.json</span>, the repository&apos;s <span className="font-mono">.mcp.json</span>,{' '}
@@ -140,7 +140,7 @@ export function CapabilitiesPicker({
       )}
 
       {!enabled ? (
-        <p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">Enter a valid repository path to list MCP servers and skills.</p>
+        <p className="rounded-xl border border-dashed p-3 text-center text-xs text-muted-foreground">Enter a valid repository path to list MCP servers and skills.</p>
       ) : (
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'mcp' | 'skills')}>
           <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +159,7 @@ export function CapabilitiesPicker({
             <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <input type="checkbox" checked={selectedOnly} onChange={(e) => setSelectedOnly(e.target.checked)} /> Selected only
             </label>
-            <button type="button" onClick={() => load(true)} disabled={loading} className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-50" title="Refresh from Claude Code">
+            <button type="button" onClick={() => load(true)} disabled={loading} className="metal-raised rounded-full p-1 text-muted-foreground hover:text-foreground disabled:opacity-50" title="Refresh from Claude Code">
               <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             </button>
           </div>
@@ -174,7 +174,7 @@ export function CapabilitiesPicker({
 
           <TabsContent value="mcp" className="mt-2 space-y-1.5">
             <p className="text-[11px] text-muted-foreground">{mcpHint}</p>
-            <div className="max-h-64 space-y-0.5 overflow-y-auto rounded-md border p-1">
+            <div className="metal-inset max-h-64 space-y-0.5 overflow-y-auto rounded-xl p-1">
               {servers.map((s) => (
                 <Row key={s.name} checked={mcpServers.includes(s.name)} onChange={(v) => onChange({ mcpServers: toggle(mcpServers, s.name, v) })}>
                   <span className="flex flex-wrap items-center gap-1.5">
@@ -196,7 +196,7 @@ export function CapabilitiesPicker({
 
           <TabsContent value="skills" className="mt-2 space-y-1.5">
             <p className="text-[11px] text-muted-foreground">{skillHint}</p>
-            <div className="max-h-64 space-y-0.5 overflow-y-auto rounded-md border p-1">
+            <div className="metal-inset max-h-64 space-y-0.5 overflow-y-auto rounded-xl p-1">
               {skillRows.map((s) => (
                 <Row key={s.id} checked={skills.includes(s.id)} onChange={(v) => onChange({ skills: toggle(skills, s.id, v) })}>
                   <span className="flex flex-wrap items-center gap-1.5">

@@ -22,10 +22,11 @@ import { api } from '@/api';
 import { getState, upsertFeature, useStore } from '@/store';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
+import { FeatureComposer } from './FeatureComposer';
 import { FeatureCardView, SortableFeatureCard } from './FeatureCard';
 import { confirm } from './confirm';
 import { toast, toastError } from './toast';
-import { isActive } from './status';
+import { isActive, isReadyToStart } from './status';
 
 const COLUMNS: { id: FeatureStatus; title: string; icon: React.ElementType; hint: string }[] = [
   { id: 'backlog', title: 'Backlog', icon: Inbox, hint: 'Drag a card into Build to start an agent' },
@@ -75,6 +76,7 @@ function Column({
   onOpen,
   onAdd,
   stats,
+  composer,
 }: {
   id: FeatureStatus;
   title: string;
@@ -85,29 +87,36 @@ function Column({
   onOpen: (f: Feature) => void;
   onAdd?: () => void;
   stats?: React.ReactNode;
+  composer?: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={cn('flex min-h-0 w-full min-w-[280px] flex-1 flex-col rounded-xl bg-muted/50 transition-colors', isOver && 'bg-sky-500/10')}>
-      <div className="flex items-center justify-between px-3 pb-2 pt-3">
+    <div
+      ref={setNodeRef}
+      className={cn('metal-glass flex min-h-0 w-full min-w-[280px] flex-1 flex-col rounded-2xl transition-shadow', isOver && 'shadow-glow')}
+    >
+      <div className="flex items-center justify-between px-3 pb-1.5 pt-3">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <span className="rounded-full bg-background px-1.5 text-xs text-muted-foreground">{ids.length}</span>
+          <span className="metal-raised flex h-6 w-6 items-center justify-center rounded-lg">
+            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+          <span className="metal-inset rounded-full px-2 text-[11px] tabular-nums text-muted-foreground">{ids.length}</span>
         </div>
         {onAdd && (
-          <Button size="icon" variant="ghost" onClick={onAdd} title="New feature">
+          <Button size="icon-round" variant="secondary" className="h-7 w-7" onClick={onAdd} title="New feature">
             <Plus />
           </Button>
         )}
       </div>
       <p className="px-3 pb-2 text-[11px] text-muted-foreground">{stats ?? hint}</p>
-      <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-3">
+      {composer && <div className="px-2 pb-2">{composer}</div>}
+      <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-3 pt-1">
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((fid) => features[fid] && <SortableFeatureCard key={fid} feature={features[fid]} onOpen={onOpen} />)}
         </SortableContext>
         {ids.length === 0 && (
-          <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-foreground/15 p-6 text-center text-xs text-muted-foreground">
             {id === 'backlog' ? 'No features yet' : id === 'build' ? 'Drop a feature here to start an agent' : 'Nothing finished yet'}
           </div>
         )}
@@ -119,6 +128,10 @@ function Column({
 export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen: (f: Feature) => void; onAdd: () => void }) {
   const allFeatures = useStore((s) => s.features);
   const concurrency = useStore((s) => s.settings?.concurrency ?? 2);
+  // Primitives only, so the selectors stay stable.
+  const projectAutoStart = useStore((s) => s.projects.find((p) => p.id === projectId)?.pipeline.autoStart ?? null);
+  const globalAutoStart = useStore((s) => s.settings?.autoStartBuild ?? true);
+  const autoStart = projectAutoStart ?? globalAutoStart;
   const features = useMemo(() => {
     const out: Record<string, Feature> = {};
     for (const f of Object.values(allFeatures)) if (f.projectId === projectId) out[f.id] = f;
@@ -188,7 +201,7 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
           });
           if (!confirmCancel) return setCols(serverCols);
         }
-        if (col === 'build' && startCol === 'done') {
+        if (col === 'build' && startCol === 'done' && autoStart) {
           const ok = await confirm({
             title: 'Start a new agent run?',
             description: `"${feature.title}" will be developed again in its existing worktree (${feature.branch ?? 'new branch'}).`,
@@ -198,7 +211,7 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
         }
         const updated = await api.updateFeature(id, { status: col, confirmCancel });
         upsertFeature(updated);
-        if (col === 'build') toast(`Agent queued for "${feature.title}"`);
+        if (col === 'build' && updated.agentStatus === 'queued') toast(`Agent queued for "${feature.title}"`);
       }
       await api.reorder(projectId, col, nextIds);
     } catch (err) {
@@ -209,6 +222,10 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
 
   const running = Object.values(features).filter((f) => f.agentStatus === 'running' || f.agentStatus === 'initialising').length;
   const queued = Object.values(features).filter((f) => f.agentStatus === 'queued').length;
+  const ready = Object.values(features).filter(isReadyToStart).length;
+  const buildStats = [running || queued ? `${running} running · ${queued} queued · limit ${concurrency} concurrent (global)` : '', ready ? `${ready} ready to start` : '']
+    .filter(Boolean)
+    .join(' · ');
   const activeFeature = activeId ? features[activeId] : null;
 
   return (
@@ -232,11 +249,17 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
             features={features}
             onOpen={onOpen}
             onAdd={c.id === 'backlog' ? onAdd : undefined}
-            stats={
-              c.id === 'build' && (running || queued)
-                ? `${running} running · ${queued} queued · limit ${concurrency} concurrent (global)`
-                : undefined
+            hint={
+              autoStart
+                ? c.hint
+                : c.id === 'backlog'
+                  ? 'Drag a card into Build, then press ▶ to start its agent'
+                  : c.id === 'build'
+                    ? 'Press ▶ on a card to start its agent'
+                    : c.hint
             }
+            stats={c.id === 'build' && buildStats ? buildStats : undefined}
+            composer={c.id === 'backlog' ? <FeatureComposer projectId={projectId} onMore={onAdd} /> : undefined}
           />
         ))}
       </div>

@@ -88,9 +88,9 @@ export function FeatureDialog({
           </Field>
           {candidates.length > 0 && (
             <Field label="Depends on" hint="This feature waits until these are Done. If exactly one of them is not merged yet, its branch is used as the starting point (stacked branch).">
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+              <div className="metal-inset max-h-40 space-y-1 overflow-y-auto rounded-xl p-2">
                 {candidates.map((c) => (
-                  <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-muted/50">
+                  <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-foreground/[0.05]">
                     <input
                       type="checkbox"
                       checked={dependsOn.includes(c.id)}

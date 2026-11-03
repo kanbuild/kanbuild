@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Toast = { id: number; text: string; tone: 'info' | 'error' };
@@ -35,11 +36,16 @@ export function Toaster() {
         <div
           key={t.id}
           className={cn(
-            'pointer-events-auto max-w-sm rounded-md border px-4 py-2.5 text-sm shadow-lg animate-in slide-in-from-bottom-2',
-            t.tone === 'error' ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200' : 'bg-background',
+            'metal-surface pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-xl animate-in slide-in-from-bottom-2',
+            t.tone === 'error' && 'border-red-300 text-red-800 dark:border-red-900/80 dark:text-red-200',
           )}
         >
-          {t.text}
+          {t.tone === 'error' ? (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+          ) : (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          )}
+          <span className="min-w-0 break-words">{t.text}</span>
         </div>
       ))}
     </div>

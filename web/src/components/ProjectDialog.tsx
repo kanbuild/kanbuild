@@ -23,6 +23,7 @@ export const DEFAULT_PIPELINE: PipelineConfig = {
   maxFixLoops: 2,
   autoCreatePr: false,
   prDraft: true,
+  autoStart: null,
   remote: 'origin',
 };
 
@@ -35,7 +36,7 @@ const ROLE_HELP: Record<ClaudeRole, string> = {
 
 function Toggle({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
   return (
-    <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-2.5 ${disabled ? 'opacity-50' : 'hover:bg-muted/40'}`}>
+    <label className={`flex cursor-pointer items-start gap-2 rounded-xl border p-2.5 metal-raised ${disabled ? 'opacity-50' : ''}`}>
       <input type="checkbox" className="mt-0.5" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span>
         <span className="block text-sm font-medium">{label}</span>
@@ -70,6 +71,7 @@ export function ProjectDialog({
   const [mcpServers, setMcpServers] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const globalProfile = useStore((s) => s.settings?.agentProfile ?? 'lean');
+  const globalAutoStart = useStore((s) => s.settings?.autoStartBuild ?? true);
   const [pipeline, setPipeline] = useState<PipelineConfig>(DEFAULT_PIPELINE);
   const [validationText, setValidationText] = useState('');
   const [detected, setDetected] = useState<{ commands: string[]; source: string } | null>(null);
@@ -235,7 +237,7 @@ export function ProjectDialog({
               if (next.skills) setSkills(next.skills);
             }}
           />
-          <details className="rounded-lg border p-3" open={!!mcpConfig}>
+          <details className="metal-surface rounded-xl p-3" open={!!mcpConfig}>
             <summary className="cursor-pointer text-sm font-semibold">Advanced: extra MCP config</summary>
             <div className="pt-3">
               <Field label="MCP config (optional)" hint="JSON or a file path passed as an additional `claude --mcp-config`, on top of the servers selected above.">
@@ -243,9 +245,19 @@ export function ProjectDialog({
               </Field>
             </div>
           </details>
-          <fieldset className="space-y-3 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-3 rounded-xl p-3">
             <legend className="px-1 text-sm font-semibold">Pipeline</legend>
             <p className="text-[11px] text-muted-foreground">What happens after a card enters Build. Every step runs in the feature&apos;s worktree; branches are never merged.</p>
+            <Field label="When a card enters Build" hint="Waiting cards show a ▶ button on the board. Follow-ups, retries and approvals always start right away.">
+              <Select
+                value={pipeline.autoStart === null ? '' : pipeline.autoStart ? 'auto' : 'manual'}
+                onChange={(e) => setP({ autoStart: e.target.value === '' ? null : e.target.value === 'auto' })}
+              >
+                <option value="">Use global setting (currently: {globalAutoStart ? 'start automatically' : 'wait for ▶'})</option>
+                <option value="auto">Start the agent automatically</option>
+                <option value="manual">Wait for ▶ Start</option>
+              </Select>
+            </Field>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Toggle checked={pipeline.plan} onChange={(v) => setP({ plan: v })} label="1. Plan first" hint="A read-only planner writes an implementation plan." />
               <Toggle checked={pipeline.planApproval} disabled={!pipeline.plan} onChange={(v) => setP({ planApproval: v })} label="Approve the plan" hint="Pause until you approve or comment on the plan." />
@@ -285,7 +297,7 @@ export function ProjectDialog({
               </div>
             </div>
           </fieldset>
-          <fieldset className="space-y-2 rounded-lg border p-3">
+          <fieldset className="metal-surface space-y-2 rounded-xl p-3">
             <legend className="px-1 text-sm font-semibold">Agent roles</legend>
             <p className="text-[11px] text-muted-foreground">Optional model and effort per role (empty = the project/global setting). A cheaper model often works well for review.</p>
             {CLAUDE_ROLES.map((role) => (
@@ -312,7 +324,7 @@ export function ProjectDialog({
             <Textarea value={tools} onChange={(e) => setTools(e.target.value)} rows={8} className="font-mono text-xs" />
           </Field>
           {shownPreview && (
-            <div className="space-y-1.5 rounded-lg border bg-muted/40 p-3">
+            <div className="metal-inset space-y-1.5 rounded-xl p-3">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 How agents are launched (saved settings)
                 {preview?.roles && (

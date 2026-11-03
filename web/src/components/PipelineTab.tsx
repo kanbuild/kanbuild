@@ -39,8 +39,8 @@ function steps(config: PipelineConfig, feature: Feature, cycleRuns: Run[]): Step
 
 const ICON: Record<StepState, React.ElementType> = { done: CheckCircle2, current: CircleDot, pending: Circle, failed: XCircle };
 const COLOR: Record<StepState, string> = {
-  done: 'text-emerald-600',
-  current: 'text-sky-600',
+  done: 'text-emerald-500',
+  current: 'text-primary',
   pending: 'text-muted-foreground/50',
   failed: 'text-red-600',
 };
@@ -75,12 +75,20 @@ export function PipelineTab({
               const Icon = ICON[s.state];
               return (
                 <li key={s.label} className="flex items-center gap-1">
-                  <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs', s.state === 'current' && 'border-sky-400 bg-sky-500/5')} title={s.detail}>
+                  <span
+                    className={cn(
+                      'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs',
+                      s.state === 'pending' ? 'border border-dashed border-foreground/15 text-muted-foreground' : 'metal-raised',
+                      s.state === 'current' && 'shadow-glow',
+                      s.state === 'failed' && 'border-red-400/60',
+                    )}
+                    title={s.detail}
+                  >
                     <Icon className={cn('h-3.5 w-3.5', COLOR[s.state])} />
                     {s.label}
                     {s.detail && <span className="text-[10px] text-muted-foreground">· {s.detail}</span>}
                   </span>
-                  {i < arr.length - 1 && <span className="text-muted-foreground/50">→</span>}
+                  {i < arr.length - 1 && <span className={cn('h-px w-3', s.state === 'done' ? 'bg-emerald-500/60' : 'bg-foreground/15')} />}
                 </li>
               );
             })}
@@ -105,12 +113,12 @@ export function PipelineTab({
                 </span>
                 <span>~{formatCost(cost)}</span>
               </div>
-              <div className="divide-y rounded-lg border">
+              <div className="metal-surface divide-y overflow-hidden rounded-xl">
                 {list.map((r) => (
                   <button
                     key={r.id}
                     onClick={() => onSelect(r)}
-                    className={cn('flex w-full items-center gap-3 px-3 py-2 text-left text-xs hover:bg-muted/50', r.id === selectedRunId && 'bg-muted/60')}
+                    className={cn('flex w-full items-center gap-3 px-3 py-2 text-left text-xs hover:bg-foreground/[0.04]', r.id === selectedRunId && 'bg-primary/10')}
                   >
                     <span className="w-6 shrink-0 text-right tabular-nums text-muted-foreground">#{r.attempt}</span>
                     <span className="w-32 shrink-0 font-medium">{runLabel(r)}</span>

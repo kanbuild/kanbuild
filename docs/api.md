@@ -51,6 +51,7 @@ All routes are mounted at `/api`.
 | `POST /features/:id/pr` | `createPrForFeature`: push the branch and open a PR, or reuse an existing one |
 | `GET /features/:id/diff?scope=&file=` | `scope` = `all` (default), `committed`, `uncommitted` or `commit:<4-40 hex>`. 404 without a worktree. Base = `feature.baseRef \|\| project.baseBranch` |
 | `POST /features/:id/cancel` | Cancel the agent or validation, or close an open gate |
+| `POST /features/:id/start` | `orchestrator.startFeature`: start a new pipeline cycle now (the ▶ button). 409 if a run is active. Works from any column (the card moves to Build) |
 | `POST /features/:id/retry` | Re-run the current step (same kind, role, message and cycle) |
 | `GET /features/:id/runs` | Runs, newest attempt first |
 | `GET /features/:id/changes` | `collectChanges(worktree, branch, base)` → `Changes` |
@@ -64,7 +65,9 @@ All routes are mounted at `/api`.
 ### `PATCH /features/:id` status semantics (api.ts:159-183)
 
 1. Field updates (title, description, priority) are applied first.
-2. `status` → `build` (from another column): `orchestrator.startFeature`. 409 if a run is already active.
+2. `status` → `build` (from another column): `orchestrator.enterBuild(id, position)`.
+   - Auto-start on (`autoStartFor(project)`): `startFeature`. 409 if a run is active.
+   - Auto-start off: the card moves to Build with `agentStatus: null` and no gate ("ready to start"), keeping `currentRunId`. No run is created until `POST /features/:id/start`.
 3. `status` → another column:
    - If an agent is active, `confirmCancel` is required (409 otherwise); then `await cancel`.
    - Any open gate is cleared, the card is moved, and `tick()` runs so dependents can start.

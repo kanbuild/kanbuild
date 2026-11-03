@@ -138,7 +138,7 @@ export function MentionTextarea({ projectId, value, onChange, showRefs = true, o
           {...rest}
         />
         {open && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border bg-background shadow-lg">
+          <div className="metal-surface absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl bg-background shadow-xl">
             <div className="border-b px-2 py-1 text-[11px] text-muted-foreground">
               {query ? (
                 <>
@@ -157,7 +157,7 @@ export function MentionTextarea({ projectId, value, onChange, showRefs = true, o
                     key={f}
                     role="option"
                     aria-selected={i === active}
-                    className={cn('flex cursor-pointer items-center gap-2 px-2 py-1 text-xs', i === active ? 'bg-muted' : 'hover:bg-muted/60')}
+                    className={cn('flex cursor-pointer items-center gap-2 px-2 py-1 text-xs', i === active ? 'bg-primary/10 text-foreground' : 'hover:bg-foreground/[0.04]')}
                     onMouseEnter={() => setActive(i)}
                     onMouseDown={(e) => {
                       e.preventDefault(); // keep focus in the textarea
@@ -178,7 +178,7 @@ export function MentionTextarea({ projectId, value, onChange, showRefs = true, o
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted disabled:opacity-50"
+          className="metal-raised inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
           onClick={startMention}
           disabled={disabled}
           title="Reference a repository file (or type @)"
@@ -186,7 +186,7 @@ export function MentionTextarea({ projectId, value, onChange, showRefs = true, o
           <AtSign className="h-3 w-3" /> Reference file
         </button>
         {refs.map((f) => (
-          <span key={f} className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 font-mono text-[11px] text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+          <span key={f} className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] text-sky-800 dark:text-cyan-200">
             {f}
             {!disabled && (
               <button type="button" onClick={() => removeRef(f)} aria-label={`Remove reference to ${f}`} className="hover:text-red-600">

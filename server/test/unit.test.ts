@@ -98,7 +98,7 @@ const project: Project = {
 };
 const settings: Settings = {
   concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude',
-  notifications: 'all', systemNotifications: false,
+  notifications: 'all', systemNotifications: false, autoStartBuild: true,
 };
 const sampleFeature: Feature = {
   id: 'f', projectId: 'p', title: 'T', description: 'D', priority: 'low', status: 'build', position: 0, branch: null, worktreePath: null, sessionId: null,

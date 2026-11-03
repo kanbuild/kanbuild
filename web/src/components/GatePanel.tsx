@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Markdown } from './Markdown';
-import { Check, ClipboardCheck, FileDiff, MessageCircleQuestion, Pencil, ShieldCheck } from 'lucide-react';
+import { Check, ClipboardCheck, HelpCircle, FileDiff, MessageCircleQuestion, Pencil, ShieldCheck } from 'lucide-react';
 import type { Feature, Run } from '@shared/types.ts';
 import { api, type GateAction } from '@/api';
 import { upsertFeature } from '@/store';
@@ -52,13 +52,19 @@ export function GatePanel({ feature, runs, onShowDiff, onDone }: { feature: Feat
   const cycleRuns = gateRun ? runs.filter((r) => r.cycle === gateRun.cycle).slice().reverse() : [];
 
   return (
-    <section className="space-y-3 border-b border-amber-300 bg-amber-50/70 p-5 dark:border-amber-900 dark:bg-amber-950/30">
+    <section className="border-b border-foreground/10 p-4">
+      <div className="metal-surface overflow-hidden rounded-2xl shadow-gold-glow">
+      <div className="flex items-center gap-2 border-b border-[hsl(var(--gold)/0.35)] bg-[hsl(var(--gold)/0.12)] px-4 py-2 text-xs font-medium text-amber-800 dark:text-[hsl(var(--gold-hi))]">
+        <HelpCircle className="h-3.5 w-3.5" /> The agent is waiting for you
+        <span className="ml-auto text-[11px] font-normal opacity-80">Checkpoint</span>
+      </div>
+      <div className="space-y-3 p-4">
       {gate.type === 'plan_approval' && (
         <>
           <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <ClipboardCheck className="h-4 w-4 text-amber-600" /> Review the implementation plan
+            <ClipboardCheck className="h-4 w-4 text-amber-600 dark:text-[hsl(var(--gold))]" /> Review the implementation plan
           </h3>
-          <div className="prose-report max-h-64 overflow-y-auto rounded-md border bg-background p-4 text-sm">
+          <div className="prose-report metal-inset max-h-64 overflow-y-auto rounded-xl p-4 text-sm">
             {gate.plan ? <Markdown>{gate.plan}</Markdown> : <p className="text-muted-foreground">The planner did not return a structured plan; see its report.</p>}
           </div>
           <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="Optional comments for the developer, or what should change in the plan" />
@@ -66,7 +72,7 @@ export function GatePanel({ feature, runs, onShowDiff, onDone }: { feature: Feat
             <Button size="sm" disabled={busy} onClick={() => act('approve', 'Plan approved — implementing')}>
               <Check /> Approve and implement
             </Button>
-            <Button size="sm" variant="outline" disabled={busy || !comment.trim()} onClick={() => act('reject', 'Plan sent back for revision')}>
+            <Button size="sm" variant="chrome" disabled={busy || !comment.trim()} onClick={() => act('reject', 'Plan sent back for revision')}>
               <Pencil /> Request plan changes
             </Button>
           </div>
@@ -76,7 +82,7 @@ export function GatePanel({ feature, runs, onShowDiff, onDone }: { feature: Feat
       {gate.type === 'clarification' && (
         <>
           <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <MessageCircleQuestion className="h-4 w-4 text-amber-600" /> The {roleLabel(gate.role ?? 'developer').toLowerCase()} has questions
+            <MessageCircleQuestion className="h-4 w-4 text-amber-600 dark:text-[hsl(var(--gold))]" /> The {roleLabel(gate.role ?? 'developer').toLowerCase()} has questions
           </h3>
           <p className="text-xs text-muted-foreground">Your answers are sent back to the same Claude Code session, which then continues.</p>
           <div className="space-y-3">
@@ -101,7 +107,7 @@ export function GatePanel({ feature, runs, onShowDiff, onDone }: { feature: Feat
       {gate.type === 'final_approval' && (
         <>
           <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <ShieldCheck className="h-4 w-4 text-amber-600" /> Ready for your approval
+            <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-[hsl(var(--gold))]" /> Ready for your approval
           </h3>
           {gate.note && <p className="text-sm text-amber-800 dark:text-amber-200">{gate.note}</p>}
           {cycleRuns.length > 0 && (
@@ -121,12 +127,14 @@ export function GatePanel({ feature, runs, onShowDiff, onDone }: { feature: Feat
             <Button size="sm" disabled={busy} onClick={() => act('approve', 'Approved — feature moved to Done')}>
               <Check /> Approve → Done
             </Button>
-            <Button size="sm" variant="outline" disabled={busy || !comment.trim()} onClick={() => act('reject', 'Changes requested — the developer continues')}>
+            <Button size="sm" variant="chrome" disabled={busy || !comment.trim()} onClick={() => act('reject', 'Changes requested — the developer continues')}>
               <Pencil /> Request changes
             </Button>
           </div>
         </>
       )}
+      </div>
+      </div>
     </section>
   );
 }
