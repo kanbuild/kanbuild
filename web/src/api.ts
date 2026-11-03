@@ -15,6 +15,7 @@ import type {
   RunEvent,
   Settings,
   TerminalSession,
+  TerminalState,
 } from '@shared/types.ts';
 
 export class ApiError extends Error {
@@ -108,7 +109,8 @@ export const api = {
   reveal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/reveal`, {}),
   session: (id: string) => req<SessionInfo>('GET', `/features/${id}/session`),
   openTerminal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/open-terminal`, {}),
-  terminalSessions: (id: string) => req<TerminalSession[]>('GET', `/features/${id}/terminal`),
+  terminalState: (id: string) => req<TerminalState>('GET', `/features/${id}/terminal`),
+  resetTerminalCwd: (id: string) => req<{ cwd: string | null }>('DELETE', `/features/${id}/terminal/cwd`),
   runTerminal: (id: string, command: string) => req<TerminalSession>('POST', `/features/${id}/terminal`, { command }),
   stopTerminal: (sessionId: string) => req<TerminalSession>('POST', `/terminal/${sessionId}/stop`, {}),
   clearTerminal: (id: string) => req<TerminalSession[]>('DELETE', `/features/${id}/terminal`),

@@ -98,6 +98,75 @@ describe('terminal command runner', () => {
     expect(done && done.outputStart).toBe(5000);
   });
 
+  describe('cd persists between commands', () => {
+    const done = (id: string) => waitFor(() => term.getTerminalSession(id)?.status === 'exited' && term.getTerminalSession(id));
+    const run = async (cmd: string) => {
+      const s = term.runTerminalCommand('ftr_cd', cwd, cmd);
+      const r = await done(s.id);
+      if (!r) throw new Error('no session');
+      return r;
+    };
+
+    it('a later command starts where cd left off', async () => {
+      fs.mkdirSync(path.join(cwd, 'sub', 'deeper'), { recursive: true });
+      const c = await run('cd sub');
+      expect(c.cwd).toBe(cwd);
+      expect(c.endCwd).toBe(path.join(cwd, 'sub'));
+      expect(c.output).toBe('');
+      const p = await run('pwd');
+      expect(p.cwd).toBe(c.endCwd);
+      expect(fs.realpathSync(p.output.trim())).toBe(fs.realpathSync(c.endCwd!));
+      expect(term.getTerminalCwd('ftr_cd', cwd)).toBe(c.endCwd);
+    });
+
+    it('records the directory even when the command exits non-zero', async () => {
+      const r = await run('cd deeper && exit 3');
+      expect(r.exitCode).toBe(3);
+      expect(r.endCwd?.endsWith('/sub/deeper')).toBe(true);
+      expect(term.getTerminalCwd('ftr_cd', cwd).endsWith('/sub/deeper')).toBe(true);
+    });
+
+    it('a command that does not cd keeps the current directory', async () => {
+      const before = term.getTerminalCwd('ftr_cd', cwd);
+      await run('true');
+      expect(term.getTerminalCwd('ftr_cd', cwd)).toBe(before);
+    });
+
+    it('reset goes back to the worktree root', async () => {
+      term.resetTerminalCwd('ftr_cd');
+      expect(term.getTerminalCwd('ftr_cd', cwd)).toBe(cwd);
+      expect((await run('pwd')).output.trim()).toBe(fs.realpathSync(cwd));
+    });
+
+    it('falls back to the root when the stored directory was deleted', async () => {
+      fs.mkdirSync(path.join(cwd, 'gone'));
+      await run('cd gone');
+      fs.rmSync(path.join(cwd, 'gone'), { recursive: true });
+      expect(term.getTerminalCwd('ftr_cd', cwd)).toBe(cwd);
+      expect((await run('pwd')).output.trim()).toBe(fs.realpathSync(cwd));
+    });
+
+    it('maps a physical path back under a symlinked worktree root', async () => {
+      const link = path.join(tmp, 'wt-link');
+      fs.symlinkSync(cwd, link);
+      const s = term.runTerminalCommand('ftr_link', link, 'cd sub');
+      const r = await done(s.id);
+      expect(r && r.endCwd).toBe(path.join(link, 'sub'));
+    });
+
+    it('cwd is tracked per feature', async () => {
+      await run('cd sub');
+      expect(term.getTerminalCwd('ftr_other', cwd)).toBe(cwd);
+      term.resetTerminalCwd('ftr_cd');
+    });
+
+    it('leaves no temp cwd files behind', async () => {
+      const r = await run('true');
+      await new Promise((res) => setTimeout(res, 50));
+      expect(fs.existsSync(path.join(os.tmpdir(), `orch-${r.id}.cwd`))).toBe(false);
+    });
+  });
+
   it('cleanOutput strips ANSI and normalizes carriage returns', () => {
     expect(term.cleanOutput('\x1b[1mbold\x1b[0m\r\nline\rnext')).toBe('bold\nline\nnext');
   });

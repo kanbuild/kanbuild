@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CornerDownLeft, Loader2, Square, SquareTerminal, Trash2 } from 'lucide-react';
+import { CornerDownLeft, FolderOpen, Loader2, RotateCcw, Square, SquareTerminal, Trash2 } from 'lucide-react';
 import type { Feature, TerminalSession } from '@shared/types.ts';
 import { api } from '@/api';
 import { onTerminal, useStore } from '@/store';
@@ -37,12 +37,25 @@ function applyChunk(s: TerminalSession, offset: number, chunk: string): Terminal
   return { ...s, output: s.output + fresh };
 }
 
+/** Show `dir` relative to the worktree: `wt-name`, `wt-name/server`, or the absolute path when outside it. */
+export function displayDir(dir: string | null, root: string | null): string {
+  if (!dir) return '';
+  if (!root) return dir;
+  const base = root.split('/').filter(Boolean).pop() ?? root;
+  if (dir === root) return base;
+  if (dir.startsWith(root + '/')) return `${base}/${dir.slice(root.length + 1)}`;
+  return dir;
+}
+
 /** Terminal tab: run shell commands in the feature's worktree and stream their output. */
 export function TerminalTab({ feature, agentActive }: { feature: Feature; agentActive: boolean }) {
   const [sessions, setSessions] = useState<TerminalSession[]>([]);
   const [command, setCommand] = useState('');
   const [busy, setBusy] = useState(false);
   const [quick, setQuick] = useState<string[]>(QUICK_FALLBACK);
+  // Where the next command runs (the server keeps it per feature, so `cd` persists).
+  const [cwd, setCwd] = useState<string | null>(feature.worktreePath);
+  const [root, setRoot] = useState<string | null>(feature.worktreePath);
   const historyRef = useRef<string[]>(loadHistory());
   const historyIdx = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -63,6 +76,9 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
     const off = onTerminal((m) => {
       if (m.type === 'terminal.updated') {
         if (m.session.featureId !== feature.id) return;
+        // A command that ended somewhere else moved the feature's cwd (mirrors terminal.ts).
+        const { endCwd, cwd: started } = m.session;
+        if (endCwd && endCwd !== started) setCwd(endCwd);
         setSessions((prev) => {
           const i = prev.findIndex((s) => s.id === m.session.id);
           if (i < 0) return [...prev, m.session];
@@ -75,9 +91,11 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
       }
     });
     api
-      .terminalSessions(feature.id)
-      .then((list) => {
+      .terminalState(feature.id)
+      .then(({ sessions: list, cwd: serverCwd, root: serverRoot }) => {
         if (!alive) return;
+        setCwd(serverCwd);
+        setRoot(serverRoot);
         setSessions((prev) => {
           // Keep any longer live copy of a session we already received.
           // Sessions started after the fetch was sent (only known from live messages) are kept too.
@@ -123,7 +141,8 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
       try {
         const s = await api.runTerminal(feature.id, c);
         // Live messages may already have delivered (and finished) this session; never overwrite them.
-        setSessions((prev) => (prev.some((x) => x.id === s.id) ? prev : [...prev, s]));        const h = historyRef.current.filter((x) => x !== c);
+        setSessions((prev) => (prev.some((x) => x.id === s.id) ? prev : [...prev, s]));
+        const h = historyRef.current.filter((x) => x !== c);
         h.push(c);
         historyRef.current = h.slice(-HISTORY_MAX);
         saveHistory(historyRef.current);
@@ -143,6 +162,15 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
   const stop = async (id: string) => {
     try {
       await api.stopTerminal(id);
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const resetCwd = async () => {
+    try {
+      setCwd((await api.resetTerminalCwd(feature.id)).cwd);
+      inputRef.current?.focus();
     } catch (err) {
       toastError(err);
     }
@@ -203,10 +231,13 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
         {sessions.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
             <p>Run commands in this feature's worktree: tests, dev servers, git.</p>
-            <p className="mt-1 text-[11px]">Output is plain text (no interactive programs). Commands stop when the backend stops.</p>
+            <p className="mt-1 text-[11px]">
+              <span className="font-mono">cd</span> carries over to the next command; environment variables (<span className="font-mono">export</span>) don't.
+              Output is plain text (no interactive programs). Commands stop when the backend stops.
+            </p>
           </div>
         ) : (
-          sessions.map((s) => <SessionBlock key={s.id} session={s} onStop={() => stop(s.id)} />)
+          sessions.map((s) => <SessionBlock key={s.id} session={s} root={root} onStop={() => stop(s.id)} />)
         )}
       </div>
 
@@ -220,6 +251,22 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
           ))}
         </div>
         <div className="metal-inset flex items-center gap-2 rounded-lg px-3 focus-within:ring-2 focus-within:ring-primary/25">
+          {cwd ? (
+            <span className="max-w-[45%] shrink-0 truncate font-mono text-xs text-muted-foreground" title={cwd} data-testid="terminal-cwd">
+              {displayDir(cwd, root)}
+            </span>
+          ) : null}
+          {cwd && root && cwd !== root ? (
+            <button
+              type="button"
+              onClick={resetCwd}
+              title="Back to the worktree root"
+              aria-label="Back to worktree root"
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          ) : null}
           <span className="font-mono text-sm text-primary">$</span>
           <input
             ref={inputRef}
@@ -245,13 +292,19 @@ export function TerminalTab({ feature, agentActive }: { feature: Feature; agentA
   );
 }
 
-function SessionBlock({ session: s, onStop }: { session: TerminalSession; onStop: () => void }) {
+function SessionBlock({ session: s, root, onStop }: { session: TerminalSession; root: string | null; onStop: () => void }) {
   const running = s.status === 'running';
+  const moved = !!s.endCwd && s.endCwd !== s.cwd;
   const ok = s.exitCode === 0;
   const duration = s.endedAt ? new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime() : null;
   return (
     <div className="metal-surface overflow-hidden rounded-xl">
       <div className="flex items-center gap-2 border-b border-border/60 px-3 py-1.5">
+        {root && s.cwd !== root ? (
+          <span className="max-w-[35%] shrink-0 truncate font-mono text-[11px] text-muted-foreground" title={s.cwd}>
+            {displayDir(s.cwd, root)}
+          </span>
+        ) : null}
         <span className="font-mono text-xs text-primary">$</span>
         <span className="min-w-0 flex-1 truncate font-mono text-xs" title={s.command}>{s.command}</span>
         {running ? (
@@ -270,7 +323,12 @@ function SessionBlock({ session: s, onStop }: { session: TerminalSession; onStop
       </div>
       <pre className={cn('max-h-96 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-relaxed', !s.output && 'text-muted-foreground')}>
         {s.outputStart > 0 ? '… (earlier output trimmed)\n' : ''}
-        {s.output || (running ? 'Waiting for output…' : '(no output)')}
+        {s.output || (running ? 'Waiting for output…' : moved ? null : '(no output)')}
+        {!running && moved ? (
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <FolderOpen className="inline h-3 w-3" /> now in <span className="text-foreground">{displayDir(s.endCwd, root)}</span>
+          </span>
+        ) : null}
       </pre>
     </div>
   );

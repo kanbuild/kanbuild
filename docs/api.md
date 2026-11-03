@@ -68,10 +68,11 @@ See [git-worktrees-validation.md](git-worktrees-validation.md#terminal-command-r
 
 | Method + path | Behavior |
 |---|---|
-| `GET /features/:id/terminal` | `TerminalSession[]` (oldest first), with buffered output for backfill |
+| `GET /features/:id/terminal` | `TerminalState {sessions, cwd, root}`: sessions oldest first with buffered output (backfill), `cwd` = where the next command runs, `root` = the worktree (both null without a worktree) |
 | `POST /features/:id/terminal` | `{command}` → `TerminalSession`. 400 if empty; 404 without a worktree; 409 while an agent is active or when 4 commands already run for this feature |
 | `POST /terminal/:sid/stop` | SIGTERM the command's process group (SIGKILL after 3 s). 404 for an unknown session |
 | `DELETE /features/:id/terminal` | Forgets finished sessions; returns the remaining (running) ones |
+| `DELETE /features/:id/terminal/cwd` | Resets the feature's terminal directory to the worktree root → `{cwd}` |
 
 ### `PATCH /features/:id` status semantics (api.ts:159-183)
 
@@ -109,7 +110,7 @@ See [git-worktrees-validation.md](git-worktrees-validation.md#terminal-command-r
 | `project.deleted` | `{projectId}` | `deleteProject` |
 | `settings.updated` | `{settings}` | `updateSettings` |
 | `notification` | `{notification: AppNotification}` | notify.ts |
-| `terminal.updated` | `{session: TerminalSession}` (full snapshot incl. output) | terminal.ts: start and exit |
+| `terminal.updated` | `{session: TerminalSession}` (full snapshot incl. output; on exit `endCwd` says where the shell ended) | terminal.ts: start and exit |
 | `terminal.output` | `{sessionId, featureId, offset, chunk}`; `offset` = absolute char offset of `chunk`, so the client can dedupe against backfill | terminal.ts |
 
 **Adding an endpoint:**

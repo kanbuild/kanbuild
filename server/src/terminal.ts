@@ -1,5 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { bus } from './events.ts';
 import { childEnv, killGroup } from './runner.ts';
 import type { TerminalSession } from '../../shared/types.ts';
@@ -8,6 +11,9 @@ import type { TerminalSession } from '../../shared/types.ts';
  * Worktree command runner: runs user-typed shell commands in a feature's worktree
  * (e.g. `npm test`, `npm run dev`) and streams the output to the dashboard.
  * Not a PTY: stdin is closed, ANSI codes are stripped. Sessions are in memory only.
+ *
+ * Each command runs in its own shell, so `cd` is carried over explicitly: an EXIT trap writes
+ * the shell's final directory to a temp file, and the next command for that feature starts there.
  */
 
 /** Characters of output kept per session (older output is dropped from the front). */
@@ -24,6 +30,41 @@ interface Entry {
 }
 
 const sessions = new Map<string, Entry>();
+/** Current directory per feature (set by commands that `cd`). Absent = the worktree root. */
+const featureCwd = new Map<string, string>();
+
+function isDir(p: string | null | undefined): p is string {
+  if (!p) return false;
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Where the next command for this feature starts: the last `cd` target if it still exists, else `root`. */
+export function getTerminalCwd(featureId: string, root: string): string {
+  const cwd = featureCwd.get(featureId);
+  return isDir(cwd) ? cwd : root;
+}
+
+/** `pwd` reports the physical path; map it back under `root` when root goes through a symlink (e.g. /tmp on macOS). */
+function underRoot(dir: string, root: string): string {
+  let real = root;
+  try {
+    real = fs.realpathSync(root);
+  } catch {
+    return dir;
+  }
+  if (real === root) return dir;
+  if (dir === real) return root;
+  return dir.startsWith(real + '/') ? root + dir.slice(real.length) : dir;
+}
+
+/** Go back to the worktree root. */
+export function resetTerminalCwd(featureId: string) {
+  featureCwd.delete(featureId);
+}
 
 export class TerminalError extends Error {
   constructor(public status: number, message: string) {
@@ -86,13 +127,14 @@ function append(e: Entry, raw: string) {
   bus.publish({ type: 'terminal.output', sessionId: s.id, featureId: s.featureId, offset, chunk });
 }
 
-/** Start `command` with /bin/sh in `cwd` (the feature's worktree). */
-export function runTerminalCommand(featureId: string, cwd: string, command: string): TerminalSession {
+/** Start `command` with /bin/sh in the feature's current directory (`root` = its worktree, by default). */
+export function runTerminalCommand(featureId: string, root: string, command: string): TerminalSession {
   const cmd = command.trim();
   if (!cmd) throw new TerminalError(400, 'Command is empty');
   if (runningCount(featureId) >= MAX_RUNNING_PER_FEATURE) {
     throw new TerminalError(409, `At most ${MAX_RUNNING_PER_FEATURE} commands can run at once. Stop one first.`);
   }
+  const cwd = getTerminalCwd(featureId, root);
   const session: TerminalSession = {
     id: `term_${randomUUID().slice(0, 8)}`,
     featureId,
@@ -104,6 +146,7 @@ export function runTerminalCommand(featureId: string, cwd: string, command: stri
     pid: null,
     startedAt: new Date().toISOString(),
     endedAt: null,
+    endCwd: null,
     output: '',
     outputStart: 0,
   };
@@ -111,11 +154,14 @@ export function runTerminalCommand(featureId: string, cwd: string, command: stri
   sessions.set(session.id, entry);
   prune(featureId);
 
-  const child = spawn('/bin/sh', ['-c', cmd], {
+  // The EXIT trap also fires on `exit N`, but not when the command is killed by a signal.
+  const cwdFile = path.join(os.tmpdir(), `orch-${session.id}.cwd`);
+  const script = `trap 'pwd > "$ORCH_TERM_CWD_FILE" 2>/dev/null' EXIT\n${cmd}`;
+  const child = spawn('/bin/sh', ['-c', script], {
     cwd,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: childEnv({ FORCE_COLOR: '0', NO_COLOR: '1', TERM: 'dumb' }),
+    env: childEnv({ FORCE_COLOR: '0', NO_COLOR: '1', TERM: 'dumb', ORCH_TERM_CWD_FILE: cwdFile }),
   });
   entry.child = child;
   session.pid = child.pid ?? null;
@@ -130,6 +176,18 @@ export function runTerminalCommand(featureId: string, cwd: string, command: stri
     done = true;
     if (entry.killTimer) clearTimeout(entry.killTimer);
     entry.child = null;
+    try {
+      const end = underRoot(fs.readFileSync(cwdFile, 'utf8').trim(), root);
+      if (isDir(end)) {
+        session.endCwd = end;
+        // Only a command that actually moved updates the feature's cwd, so a long-running
+        // command started earlier (e.g. a dev server) doesn't undo a later `cd` when it ends.
+        if (end !== cwd) featureCwd.set(featureId, end);
+      }
+    } catch {
+      /* killed by a signal, or failed to start */
+    }
+    fs.rm(cwdFile, { force: true }, () => {});
     session.status = 'exited';
     session.exitCode = code;
     session.signal = signal;

@@ -72,7 +72,7 @@ npm run desktop:dev         # Mac app from source (Electron); desktop:dist packa
 
 - **Migrations are append-only.** Never edit an entry in `MIGRATIONS` (`server/src/db.ts`); append a new one.
   The current schema version is 5. Update `docs/data-model.md`.
-- **Bump `API_VERSION`** (`shared/types.ts`, now 8) whenever the backend and dashboard must change together.
+- **Bump `API_VERSION`** (`shared/types.ts`, now 9) whenever the backend and dashboard must change together.
   The UI shows a reload banner on a mismatch.
 - **Imports use explicit `.ts` extensions** (`allowImportingTsExtensions`). Shared types are imported as `@shared/types.ts` in web.
 - **The pipeline is a pure function of the DB** (`pipeline.ts` `nextStep` over the cycle's runs and stored reports).

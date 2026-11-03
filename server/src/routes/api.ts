@@ -28,7 +28,9 @@ import { RUNS_DIR } from '../db.ts';
 import {
   TerminalError,
   clearTerminalSessions,
+  getTerminalCwd,
   listTerminalSessions,
+  resetTerminalCwd,
   runTerminalCommand,
   runningCount as terminalRunningCount,
   stopTerminalCommand,
@@ -308,16 +310,22 @@ function terminalCall<T>(fn: () => T): T {
   }
 }
 api.get('/features/:id/terminal', h((req) => {
-  getFeature(req.params.id);
-  return listTerminalSessions(req.params.id);
+  const f = getFeature(req.params.id);
+  const root = f.worktreePath && fs.existsSync(f.worktreePath) ? f.worktreePath : null;
+  return { sessions: listTerminalSessions(f.id), cwd: root ? getTerminalCwd(f.id, root) : null, root };
+}));
+api.delete('/features/:id/terminal/cwd', h((req) => {
+  const f = getFeature(req.params.id);
+  resetTerminalCwd(f.id);
+  return { cwd: f.worktreePath };
 }));
 api.post('/features/:id/terminal', h((req) => {
   const f = getFeature(req.params.id);
   const command = String(req.body?.command ?? '').trim();
   if (!command) throw new HttpError(400, 'Command is empty');
   if (isActive(f.id)) throw new HttpError(409, 'The agent is working in this worktree; wait for it to finish');
-  const cwd = existingWorktree(f.id);
-  return terminalCall(() => runTerminalCommand(f.id, cwd, command));
+  const root = existingWorktree(f.id);
+  return terminalCall(() => runTerminalCommand(f.id, root, command));
 }));
 api.delete('/features/:id/terminal', h((req) => {
   getFeature(req.params.id);
