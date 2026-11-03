@@ -90,17 +90,22 @@ export function BranchSwitcher({ project }: { project: Project }) {
           'metal-raised inline-flex h-7 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-full px-2.5 font-mono text-[11px] text-muted-foreground transition-[filter,box-shadow,color] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
           open && 'text-foreground shadow-glow',
         )}
-        title="Base branch: new feature branches start here. Click to change."
+        title="Base branch for new features: new feature branches start here. It does not check out a branch in your repo or IDE. Click to change."
+        aria-label={`Base branch for new features: ${project.baseBranch}`}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <GitBranch className="h-3 w-3 shrink-0 text-primary" />
+        <span className="shrink-0 font-sans text-[10px] uppercase tracking-wide text-muted-foreground/70">base</span>
         <span className="truncate">{project.baseBranch}</span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </button>
       {open && (
         <div className="metal-surface absolute left-0 top-full z-50 mt-1.5 w-72 origin-top-left animate-pop-in rounded-xl p-2 text-foreground">
-          <div className="px-1 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Base branch</div>
+          <div className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Base branch for new features</div>
+          <p className="px-1 pb-2 pt-0.5 text-[10px] leading-snug text-muted-foreground">
+            New feature worktrees branch from this. It does not run <span className="font-mono">git checkout</span>, so your repo and IDE stay on their current branch.
+          </p>
           <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter branches…" className="metal-inset h-8 text-xs" />
           <div className="mt-2 max-h-64 overflow-y-auto" role="listbox">
             {loading && !branches ? (
@@ -135,7 +140,7 @@ export function BranchSwitcher({ project }: { project: Project }) {
             )}
           </div>
           <p className="mt-2 border-t px-1 pt-2 text-[10px] leading-snug text-muted-foreground">
-            New features branch from this. Existing features keep the ref they started from. Your repo's checkout is not changed.
+            Existing features keep the ref they started from. To try a feature, use its Terminal tab or open its worktree in your editor.
           </p>
         </div>
       )}

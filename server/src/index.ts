@@ -9,6 +9,7 @@ import { bus } from './events.ts';
 import { orchestrator } from './orchestrator.ts';
 import { setClientCounter } from './notify.ts';
 import { api } from './routes/api.ts';
+import { stopAllTerminalCommands } from './terminal.ts';
 import type { ServerMessage } from '../../shared/types.ts';
 
 const HOST = process.env.ORCH_HOST || '127.0.0.1';
@@ -127,6 +128,7 @@ function shutdown() {
   // Agents are detached and keep running; they are re-attached on next start.
   console.log('[orchestrator] shutting down (running agents continue in the background)');
   orchestrator.shutdown();
+  stopAllTerminalCommands();
   server.close();
   process.exit(0);
 }

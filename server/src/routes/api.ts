@@ -25,6 +25,14 @@ import { getCatalog } from '../catalog.ts';
 import { prepareCapabilities } from '../capabilities.ts';
 import { listRepoFiles, rankFiles } from '../files.ts';
 import { RUNS_DIR } from '../db.ts';
+import {
+  TerminalError,
+  clearTerminalSessions,
+  listTerminalSessions,
+  runTerminalCommand,
+  runningCount as terminalRunningCount,
+  stopTerminalCommand,
+} from '../terminal.ts';
 import path from 'node:path';
 import { buildClaudeArgs, previewCommand, resolveLaunchConfig, resumeCommand } from '../launch.ts';
 import { buildPlanPrompt, buildPrompt, buildReviewerPrompt, buildTesterPrompt } from '../prompt.ts';
@@ -277,6 +285,7 @@ api.post('/features/:id/followup', h((req) => orchestrator.followUp(req.params.i
 api.delete('/features/:id/worktree', h(async (req, res) => {
   const f = getFeature(req.params.id);
   if (isActive(f.id)) throw new HttpError(409, 'Cannot remove the worktree while an agent is running');
+  if (terminalRunningCount(f.id) > 0) throw new HttpError(409, 'Stop the commands running in the Terminal tab first');
   if (!f.worktreePath) throw new HttpError(404, 'Feature has no worktree');
   const project = getProject(f.projectId);
   const force = req.query.force === 'true';
@@ -288,6 +297,33 @@ api.delete('/features/:id/worktree', h(async (req, res) => {
   patchFeatureState(f.id, { worktreePath: null });
   return { ok: true, note: `Worktree removed. Branch ${f.branch} was kept.` };
 }));
+
+// ---- Terminal (commands run in the feature's worktree) ----
+function terminalCall<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof TerminalError) throw new HttpError(err.status, err.message);
+    throw err;
+  }
+}
+api.get('/features/:id/terminal', h((req) => {
+  getFeature(req.params.id);
+  return listTerminalSessions(req.params.id);
+}));
+api.post('/features/:id/terminal', h((req) => {
+  const f = getFeature(req.params.id);
+  const command = String(req.body?.command ?? '').trim();
+  if (!command) throw new HttpError(400, 'Command is empty');
+  if (isActive(f.id)) throw new HttpError(409, 'The agent is working in this worktree; wait for it to finish');
+  const cwd = existingWorktree(f.id);
+  return terminalCall(() => runTerminalCommand(f.id, cwd, command));
+}));
+api.delete('/features/:id/terminal', h((req) => {
+  getFeature(req.params.id);
+  return clearTerminalSessions(req.params.id);
+}));
+api.post('/terminal/:sid/stop', h((req) => terminalCall(() => stopTerminalCommand(req.params.sid))));
 
 // ---- Runs ----
 api.get('/runs/:id', h((req) => {

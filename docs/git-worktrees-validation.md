@@ -1,6 +1,6 @@
 # Git, worktrees, diffs, dependencies and validation
 
-Source files: `server/src/git.ts`, `server/src/diffParse.ts`, `server/src/dependencies.ts`, `server/src/validation.ts`
+Source files: `server/src/terminal.ts`, `server/src/git.ts`, `server/src/diffParse.ts`, `server/src/dependencies.ts`, `server/src/validation.ts`
 
 ## git.ts
 
@@ -114,3 +114,14 @@ It never writes a lockfile.
 - `cancel()`: SIGTERM, then SIGKILL after 3 s. `wasCancelled` reports it.
 
 The UI's Project dialog shows detected commands via `GET /projects/:id/validation-preview`.
+
+## Terminal command runner (`terminal.ts`)
+
+Lets the user try a built feature from the dashboard's **Terminal** tab (`npm test`, `npm run dev`, `git status`) without opening an IDE. It is a **command runner, not a PTY**: no native deps, so the Mac app needs no packaging changes. Interactive programs (prompts, vim, TUIs) don't work.
+
+- `runTerminalCommand(featureId, cwd, command)` (line 90): `/bin/sh -c` in the worktree, `detached` (own process group), stdin ignored, `env = childEnv({FORCE_COLOR:'0', NO_COLOR:'1', TERM:'dumb'})`. The route resolves `cwd` with `existingWorktree()` and refuses while an agent is active.
+- Output: `cleanOutput()` (line 36) strips ANSI/OSC codes and turns `\r` into newlines. Each chunk is published as `terminal.output` with its absolute `offset`; the buffer keeps the last `MAX_OUTPUT_CHARS` (200k).
+- Limits: `MAX_RUNNING_PER_FEATURE` = 4 (else `TerminalError(409)`), `MAX_SESSIONS_PER_FEATURE` = 20 (oldest finished ones are pruned).
+- `stopTerminalCommand(id)` (line 150): `killGroup` SIGTERM, then SIGKILL after 3 s. `clearTerminalSessions` drops finished sessions.
+- **Unlike agents, terminal commands do not outlive the backend:** `stopAllTerminalCommands()` runs in index.ts `shutdown()`. Sessions are in memory, so a restart forgets them.
+- Removing a worktree is refused (409) while one of its commands runs.

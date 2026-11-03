@@ -1,6 +1,6 @@
 # REST API and WebSocket
 
-Source files: `server/src/routes/api.ts`, `server/src/events.ts`, `server/src/index.ts` (guard and WS), `web/src/api.ts` (client)
+Source files: `server/src/routes/api.ts`, `server/src/terminal.ts`, `server/src/events.ts`, `server/src/index.ts` (guard and WS), `web/src/api.ts` (client)
 
 All routes are mounted at `/api`.
 
@@ -60,7 +60,18 @@ All routes are mounted at `/api`.
 | `GET /features/:id/session` | `{sessionId, worktreePath, worktreeExists, command: "cd <wt> && claude --resume <sid>", canOpenTerminal (darwin only)}` |
 | `POST /features/:id/open-terminal` | macOS Terminal with the resume command. 409 if the agent is active or there is no session |
 | `POST /features/:id/followup` | `{message}`. Resumes the session with a new instruction (new cycle) |
-| `DELETE /features/:id/worktree?force=true` | 409 if active; 404 if there is no worktree. Dirty without `force` → 409 `{error, dirty:true}`. Removes the worktree and keeps the branch |
+| `DELETE /features/:id/worktree?force=true` | 409 if active or a Terminal command is running; 404 if there is no worktree. Dirty without `force` → 409 `{error, dirty:true}`. Removes the worktree and keeps the branch |
+
+## Terminal (commands in a feature's worktree)
+
+See [git-worktrees-validation.md](git-worktrees-validation.md#terminal-command-runner-terminalts). Sessions live in memory only.
+
+| Method + path | Behavior |
+|---|---|
+| `GET /features/:id/terminal` | `TerminalSession[]` (oldest first), with buffered output for backfill |
+| `POST /features/:id/terminal` | `{command}` → `TerminalSession`. 400 if empty; 404 without a worktree; 409 while an agent is active or when 4 commands already run for this feature |
+| `POST /terminal/:sid/stop` | SIGTERM the command's process group (SIGKILL after 3 s). 404 for an unknown session |
+| `DELETE /features/:id/terminal` | Forgets finished sessions; returns the remaining (running) ones |
 
 ### `PATCH /features/:id` status semantics (api.ts:159-183)
 
@@ -98,6 +109,8 @@ All routes are mounted at `/api`.
 | `project.deleted` | `{projectId}` | `deleteProject` |
 | `settings.updated` | `{settings}` | `updateSettings` |
 | `notification` | `{notification: AppNotification}` | notify.ts |
+| `terminal.updated` | `{session: TerminalSession}` (full snapshot incl. output) | terminal.ts: start and exit |
+| `terminal.output` | `{sessionId, featureId, offset, chunk}`; `offset` = absolute char offset of `chunk`, so the client can dedupe against backfill | terminal.ts |
 
 **Adding an endpoint:**
 1. Add the route in `api.ts` inside `h()`.

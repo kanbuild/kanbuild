@@ -54,7 +54,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 - `loadFeatures(pid)`.
 - `setSettings` (merges).
 
-**Pub/sub channels** (not stored): `onRunEvent`, `onRunUpdate`, `onNotification`. Run events and run lists live in component state; only `feature.run` is global.
+**Pub/sub channels** (not stored): `onRunEvent`, `onRunUpdate`, `onNotification`, `onTerminal` (`terminal.*` messages). Run events and run lists live in component state; only `feature.run` is global.
 
 **WebSocket client.** `connect()` (128-158):
 - Uses `ws(s)://host/ws`.
@@ -72,12 +72,13 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 | `project.*` | upsert/remove |
 | `settings.updated` | merge |
 | `notification` | listeners |
+| `terminal.updated` / `terminal.output` | `onTerminal` listeners |
 
 ## API client (`api.ts`)
 
 - `req(method, url, body)` fetches `/api${url}`.
 - On a non-2xx response it throws `ApiError(status, data.error, data)`. The parsed body is on `err.body`; for example `err.body.dirty` is used when removing a worktree.
-- The `api` object has one function per endpoint in [api.md](api.md): `settings`, `updateSettings`, `projects`, `validatePath`, `createProject`, `updateProject`, `deleteProject`, `features`, `createFeature`, `updateFeature`, `deleteFeature`, `reorder`, `cancel`, `retry`, `openEditor`, `reveal`, `session`, `openTerminal`, `followUp`, `launchPreview`, `removeWorktree`, `runs`, `changes`, `setDependencies`, `gate`, `continuePipeline`, `createPr`, `diff`, `catalog`, `searchFiles`, `validationPreview`, `githubStatus`, `setGithubToken`, `testNotification`, `events`, `report`.
+- The `api` object has one function per endpoint in [api.md](api.md): `settings`, `updateSettings`, `projects`, `validatePath`, `createProject`, `updateProject`, `deleteProject`, `features`, `createFeature`, `updateFeature`, `deleteFeature`, `reorder`, `cancel`, `retry`, `openEditor`, `reveal`, `session`, `openTerminal`, `terminalSessions`, `runTerminal`, `stopTerminal`, `clearTerminal`, `followUp`, `launchPreview`, `removeWorktree`, `runs`, `changes`, `setDependencies`, `gate`, `continuePipeline`, `createPr`, `diff`, `catalog`, `searchFiles`, `validationPreview`, `githubStatus`, `setGithubToken`, `testNotification`, `events`, `report`.
 - Types: `SettingsResponse`, `SessionInfo`, `LaunchPreview`, `ProjectInput`, `GateAction`.
 
 ## Layout and components
@@ -158,10 +159,10 @@ The compact quick-add at the top of the Backlog column, built on the `Composer` 
 
 ### `BranchSwitcher.tsx` (project header)
 
-- A `GitBranch` chip showing `project.baseBranch`. Clicking it opens a popover (absolute panel; outside click or Esc closes it). Keyed by project ID in `App.tsx`, so it resets when switching projects.
+- A `GitBranch` chip showing a small "base" label and `project.baseBranch` (`aria-label` "Base branch for new features: …"). Clicking it opens a popover (absolute panel; outside click or Esc closes it). Keyed by project ID in `App.tsx`, so it resets when switching projects.
 - On every open it reloads branches via `api.validatePath(project.path)` (no dedicated endpoint) and marks the repo's checked-out branch.
 - A filter input narrows the list. Choosing a branch calls `api.updateProject(id, {baseBranch})`, then `upsertProject` and a toast. The server rejects unknown branches (toast error).
-- It only changes the ref **new** features branch from. Existing features keep `feature.baseRef`, and the repo's own checkout is never touched (no `git checkout`).
+- It only changes the ref **new** features branch from. Existing features keep `feature.baseRef`, and the repo's own checkout is never touched (no `git checkout`), so the user's IDE stays on its branch. The popover says so at the top, and its footer points to the feature's Terminal tab / Open in editor for trying a feature.
 
 ### `FeatureDialog.tsx`
 
@@ -232,6 +233,12 @@ The compact quick-add at the top of the Backlog column, built on the `Composer` 
    - Followed by the `DiffViewer`.
 5. **Tests / Validation**: for validator runs, a `<details>` per command (open when failed); otherwise the self-reported tests and build.
 6. **Report**: `report.markdown` rendered with `Markdown` in `.prose-report`.
+7. **Terminal** (`TerminalTab.tsx`): run shell commands in the feature's worktree (server: [git-worktrees-validation.md](git-worktrees-validation.md#terminal-command-runner-terminalts)).
+   - Header: the worktree path, "N running", Clear (finished sessions).
+   - One `metal-surface` block per command: `$ command`, a running badge + Stop, or duration + `exit N` / signal badge; output in a `<pre>` (max-h-96), "earlier output trimmed" when `outputStart > 0`. Auto-scrolls while the user is at the bottom.
+   - Prompt: `$` input (`aria-label="Terminal command"`); Enter runs; ↑/↓ walk the history in localStorage `orch:termHistory` (50 max). Quick chips: detected validation commands (`api.validationPreview`, minus installs) + `git status`, `git log --oneline -10`.
+   - Disabled with a hint when there is no worktree or the agent is active (`isActive(feature.agentStatus)`).
+   - Sync: subscribes to `onTerminal` **before** the backfill fetch, and re-fetches whenever `connected` flips (missed WS messages aren't replayed). Chunks merge by `offset` (`applyChunk`), and the backfill merge keeps sessions it doesn't list and never downgrades an exited session to running.
 
 ### `GatePanel.tsx`
 
@@ -372,7 +379,7 @@ Under `prefers-reduced-motion`, these animations collapse to 1 ms (spinners and 
 1. **Hooks must run unconditionally.** A conditional `useStore` in App.tsx once blanked the dashboard (fixed in 7ddcbe2, which also added ErrorBoundary).
 2. **Stable selector results only.** A selector that returns a fresh `[]` or `{}` causes a render loop.
 3. **Version banner:** bump `API_VERSION` in `shared/types.ts` for coordinated changes. The server sends `index.html` with no-cache, so a reload picks up a rebuilt dashboard.
-4. **localStorage keys:** `orch:lastProject`, `orch:diffMode` and `orch:theme`. Every access is wrapped in try/catch.
+4. **localStorage keys:** `orch:lastProject`, `orch:diffMode`, `orch:theme` and `orch:termHistory`. Every access is wrapped in try/catch.
 5. **No UI action merges branches.** Create PR pushes the branch and opens a PR.
 6. Costs are always labeled "est.".
 7. **Textareas with `bg-none`** (no metal gradient) also need `bg-transparent`, or the browser's dark form-field color shows through.

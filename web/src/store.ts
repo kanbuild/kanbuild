@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AppNotification, Feature, Project, Run, RunEvent, ServerMessage, Settings } from '@shared/types.ts';
+
+export type TerminalMessage = Extract<ServerMessage, { type: 'terminal.updated' | 'terminal.output' }>;
 import { api, type SettingsResponse } from './api';
 
 interface State {
@@ -15,6 +17,15 @@ const listeners = new Set<() => void>();
 const eventListeners = new Set<(e: RunEvent) => void>();
 const runListeners = new Set<(r: Run) => void>();
 const notificationListeners = new Set<(n: AppNotification) => void>();
+const terminalListeners = new Set<(m: TerminalMessage) => void>();
+
+/** Terminal tab messages (`terminal.updated` / `terminal.output`); not stored globally. */
+export function onTerminal(fn: (m: TerminalMessage) => void) {
+  terminalListeners.add(fn);
+  return () => {
+    terminalListeners.delete(fn);
+  };
+}
 
 export function onNotification(fn: (n: AppNotification) => void) {
   notificationListeners.add(fn);
@@ -121,6 +132,10 @@ function handle(msg: ServerMessage) {
       break;
     case 'notification':
       notificationListeners.forEach((l) => l(msg.notification));
+      break;
+    case 'terminal.updated':
+    case 'terminal.output':
+      terminalListeners.forEach((l) => l(msg));
       break;
   }
 }
