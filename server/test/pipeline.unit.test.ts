@@ -186,7 +186,7 @@ describe('github', () => {
 
 const project: Project = {
   id: 'p', name: 'Shop', description: '', path: '/r', baseBranch: 'main', worktreeRoot: '/w', allowedTools: ['Read', 'Edit', 'Bash(npm:*)'], model: 'opus',
-  agentProfile: '', effort: '', mcpConfig: '', pipeline: DEFAULT_PIPELINE, roles: { reviewer: { model: 'sonnet', effort: 'low' } }, createdAt: '',
+  agentProfile: '', effort: '', mcpConfig: '', mcpServers: [], skills: [], pipeline: DEFAULT_PIPELINE, roles: { reviewer: { model: 'sonnet', effort: 'low' } }, createdAt: '',
 };
 const settings: Settings = {
   concurrency: 2, agentProfile: 'lean', effort: 'medium', maxBudgetUsd: 0, defaultModel: '', editorCommand: 'vscode', claudeBinary: 'claude', notifications: 'all', systemNotifications: false,

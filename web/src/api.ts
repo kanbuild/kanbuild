@@ -1,4 +1,5 @@
 import type {
+  Catalog,
   Changes,
   DiffResult,
   Feature,
@@ -75,6 +76,8 @@ export interface ProjectInput {
   agentProfile?: string;
   effort?: string;
   mcpConfig?: string;
+  mcpServers?: string[];
+  skills?: string[];
   pipeline?: Partial<PipelineConfig>;
   roles?: RolesConfig;
 }
@@ -116,6 +119,9 @@ export const api = {
   createPr: (id: string) => req<Feature>('POST', `/features/${id}/pr`, {}),
   diff: (id: string, scope = 'all', file?: string) =>
     req<DiffResult>('GET', `/features/${id}/diff?scope=${encodeURIComponent(scope)}${file ? `&file=${encodeURIComponent(file)}` : ''}`),
+  catalog: (path: string, refresh = false) => req<Catalog>('POST', '/catalog', { path, refresh }),
+  searchFiles: (projectId: string, q: string, limit = 30) =>
+    req<string[]>('GET', `/projects/${projectId}/files?q=${encodeURIComponent(q)}&limit=${limit}`),
   validationPreview: (projectId: string) => req<{ commands: string[]; source: string }>('GET', `/projects/${projectId}/validation-preview`),
   githubStatus: () => req<GithubStatus & { error?: string }>('GET', '/settings/github'),
   setGithubToken: (token: string) => req<GithubStatus>('PUT', '/settings/github', { token }),

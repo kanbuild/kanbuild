@@ -4,7 +4,8 @@ import { api } from '@/api';
 import { upsertFeature, useStore } from '@/store';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Field, Input, Select, Textarea } from './ui/input';
+import { Field, Input, Select } from './ui/input';
+import { MentionTextarea } from './MentionTextarea';
 import { toastError } from './toast';
 
 export function FeatureDialog({
@@ -68,10 +69,11 @@ export function FeatureDialog({
           <Field label="Title">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Portfolio charts" autoFocus required />
           </Field>
-          <Field label="Description & implementation requirements" hint="Multiline. Be specific: acceptance criteria, edge cases, files or patterns to follow.">
-            <Textarea
+          <Field label="Description & implementation requirements" hint="Multiline. Be specific: acceptance criteria, edge cases, files or patterns to follow. Type @ to reference a repository file.">
+            <MentionTextarea
+              projectId={projectId}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
               rows={12}
               className="font-mono text-xs"
               placeholder={'Add a line chart of portfolio value over time to the dashboard.\n\n- Use the existing chart library\n- Support 1M / 6M / 1Y ranges\n- Add unit tests for the data transformation'}

@@ -23,6 +23,7 @@ import {
   fixMessage,
   formatAnswers,
 } from './prompt.ts';
+import { prepareCapabilities } from './capabilities.ts';
 import { buildClaudeArgs, previewCommand, resolveLaunchConfig } from './launch.ts';
 import { buildReport, buildValidationReport, extractSelfReport } from './report.ts';
 import { LogTail, isAlive, killGroup, launchDetached, readExitCode, readStderrTail } from './runner.ts';
@@ -345,6 +346,11 @@ export class Orchestrator {
       }
 
       const logDir = path.join(RUNS_DIR, runId);
+      // Generated MCP config / skills plugin live with the run, so concurrent runs never share them.
+      cfg.capabilities = prepareCapabilities(project, cfg.profile, { dir: path.join(logDir, 'capabilities'), write: true });
+      if (cfg.capabilities?.missing.length) {
+        addEvent(runId, 'warning', `Selected MCP servers/skills not found in Claude Code: ${cfg.capabilities.missing.join(', ')}`);
+      }
       const args = buildClaudeArgs(prompt, cfg, { resumeSessionId: resume });
       fs.mkdirSync(logDir, { recursive: true });
       fs.writeFileSync(path.join(logDir, 'prompt.md'), prompt);

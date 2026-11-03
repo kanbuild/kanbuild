@@ -52,6 +52,8 @@ Node.js backend (Express, ws, node:sqlite)
    ├─ Agent orchestrator + queue         server/src/orchestrator.ts
    ├─ Pipeline state machine             server/src/pipeline.ts
    ├─ Validation runner                  server/src/validation.ts
+   ├─ MCP/skill catalog + launch wiring  server/src/catalog.ts, capabilities.ts
+   ├─ Repository file search (@refs)     server/src/files.ts
    ├─ Dependencies / stacking            server/src/dependencies.ts
    ├─ Diff parser                        server/src/diffParse.ts
    ├─ Notifications                      server/src/notify.ts
@@ -198,6 +200,19 @@ Agents run the normal Claude Code harness in headless mode (`claude -p`). The pr
 
 The prompt defers to the repository's own documentation workflow. CLAUDE.md decides which docs, such as `agent-docs/`, the agent reads and keeps up to date. The prompt asks the agent to read only the relevant docs, prefer them over exploring the code, and report `docs_updated`. It also lists the allowed shell commands, so the agent doesn't waste turns on commands that will be denied.
 
+### MCP servers and skills
+
+**Project settings → MCP servers & skills** lists what your local Claude Code knows about:
+
+- MCP servers from `~/.claude.json` (user and local scope), the repository's `.mcp.json`, installed plugins and `claude mcp list` (which adds connection status and claude.ai connectors);
+- skills from `~/.claude/skills`, the repository's `.claude/skills` and installed plugins.
+
+Search the lists and tick the servers and skills this project's agents may use. If nothing is selected, the profile default applies: lean loads no MCP servers or skills, and full loads everything. Selected servers are written to a per-run `--mcp-config` file (mode 0600, stored with the run) and loaded with `--strict-mcp-config`, and their tools are added to `--allowedTools`. claude.ai connectors can't be exported to a file. Selecting one therefore drops `--strict-mcp-config`, and the servers you didn't select are blocked through `--disallowedTools` instead. In the lean profile, selected user and plugin skills are loaded through a session-only `--plugin-dir` (`orch-skills:<name>`), and the `Skill` tool is enabled. The launch preview shows the resulting command.
+
+### Referencing files in descriptions
+
+Type `@` in a feature description or follow-up message to search the repository's files (`git ls-files`, including untracked files that aren't ignored). Press ↑/↓ and then Enter to insert `@path/to/file`. Referenced files appear as chips under the text. The prompt also gets a **Referenced files** list that tells the agent to read those files first, with a note on any path that doesn't exist in the base checkout.
+
 ### Continuing a session
 
 Each run records its Claude Code session ID. From a card's **Overview** tab you can continue in two ways:
@@ -320,6 +335,8 @@ ORCH_CLAUDE_BIN=$PWD/server/test/fixtures/fake-claude.mjs npm start
 - `POST /api/features/:id/followup` (`{ message }`)
 - `GET /api/features/:id/session`
 - `GET /api/projects/:id/launch-preview`
+- `POST /api/catalog` (`{ path, refresh? }`): MCP servers and skills discovered from Claude Code
+- `GET /api/projects/:id/files?q=&limit=`: repository file search for `@` references
 - `GET /api/features/:id/{runs,changes}`
 - `DELETE /api/features/:id/worktree[?force=true]`
 - `GET /api/runs/:id/{events,report}`

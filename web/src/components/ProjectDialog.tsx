@@ -8,6 +8,7 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Field, Input, Select, Textarea } from './ui/input';
 import { toastError } from './toast';
+import { CapabilitiesPicker } from './CapabilitiesPicker';
 
 const NO_TOOLS: string[] = [];
 
@@ -66,6 +67,9 @@ export function ProjectDialog({
   const [agentProfile, setAgentProfile] = useState('');
   const [effort, setEffort] = useState('');
   const [mcpConfig, setMcpConfig] = useState('');
+  const [mcpServers, setMcpServers] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  const globalProfile = useStore((s) => s.settings?.agentProfile ?? 'lean');
   const [pipeline, setPipeline] = useState<PipelineConfig>(DEFAULT_PIPELINE);
   const [validationText, setValidationText] = useState('');
   const [detected, setDetected] = useState<{ commands: string[]; source: string } | null>(null);
@@ -88,6 +92,8 @@ export function ProjectDialog({
     setAgentProfile(project?.agentProfile ?? '');
     setEffort(project?.effort ?? '');
     setMcpConfig(project?.mcpConfig ?? '');
+    setMcpServers(project?.mcpServers ?? []);
+    setSkills(project?.skills ?? []);
     setPipeline(project?.pipeline ?? DEFAULT_PIPELINE);
     setValidationText((project?.pipeline.validationCommands ?? []).join('\n'));
     setRoles(project?.roles ?? {});
@@ -131,6 +137,8 @@ export function ProjectDialog({
       agentProfile,
       effort,
       mcpConfig,
+      mcpServers,
+      skills,
       allowedTools: tools.split('\n').map((t) => t.trim()).filter(Boolean),
       pipeline: { ...pipeline, validationCommands: validationText.split('\n').map((t) => t.trim()).filter(Boolean) },
       roles,
@@ -216,9 +224,25 @@ export function ProjectDialog({
               </Select>
             </Field>
           </div>
-          <Field label="MCP config (optional)" hint="JSON or a file path for `claude --mcp-config`. With the lean profile, only these MCP servers are loaded.">
-            <Input value={mcpConfig} onChange={(e) => setMcpConfig(e.target.value)} placeholder=".mcp.json" className="font-mono text-xs" />
-          </Field>
+          <CapabilitiesPicker
+            repoPath={project?.path ?? path}
+            enabled={!!valid}
+            profile={(agentProfile || globalProfile) as 'lean' | 'full'}
+            mcpServers={mcpServers}
+            skills={skills}
+            onChange={(next) => {
+              if (next.mcpServers) setMcpServers(next.mcpServers);
+              if (next.skills) setSkills(next.skills);
+            }}
+          />
+          <details className="rounded-lg border p-3" open={!!mcpConfig}>
+            <summary className="cursor-pointer text-sm font-semibold">Advanced: extra MCP config</summary>
+            <div className="pt-3">
+              <Field label="MCP config (optional)" hint="JSON or a file path passed as an additional `claude --mcp-config`, on top of the servers selected above.">
+                <Input value={mcpConfig} onChange={(e) => setMcpConfig(e.target.value)} placeholder=".mcp.json" className="font-mono text-xs" />
+              </Field>
+            </div>
+          </details>
           <fieldset className="space-y-3 rounded-lg border p-3">
             <legend className="px-1 text-sm font-semibold">Pipeline</legend>
             <p className="text-[11px] text-muted-foreground">What happens after a card enters Build. Every step runs in the feature&apos;s worktree; branches are never merged.</p>
