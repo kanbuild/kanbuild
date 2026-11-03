@@ -53,7 +53,7 @@ jobs:
             echo "### macOS build"
             echo "- Signed: $HAS_CERT"
             echo "- Notarized: $HAS_NOTARY"
-            [ "$HAS_CERT" = "true" ] || echo "> Unsigned build: users must right-click → Open the first time. Add the Apple secrets to sign and notarize."
+            [ "$HAS_CERT" = "true" ] || echo "> Unsigned build: on macOS 15+ users must try to open the app, then go to System Settings → Privacy & Security → Open Anyway (older macOS: right-click → Open). Add the Apple secrets to sign and notarize."
             ls -lh desktop/release/*.dmg desktop/release/*.zip | sed 's/^/    /'
           } >> "$GITHUB_STEP_SUMMARY"
 

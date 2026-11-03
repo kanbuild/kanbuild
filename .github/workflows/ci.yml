@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # The repo's default branch is currently claude/affectionate-wright-b6ps16; main is listed for after a rename.
+    branches: [main, claude/affectionate-wright-b6ps16]
   pull_request:
 
 jobs:
