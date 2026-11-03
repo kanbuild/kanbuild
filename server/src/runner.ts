@@ -29,16 +29,21 @@ export const INHERITED_SESSION_VARS = [
 ];
 
 /**
- * Environment for processes the orchestrator starts. If the orchestrator itself was started from inside
+ * Environment for processes the orchestrator starts (agents and validation commands). If the orchestrator itself was started from inside
  * a Claude Code session, children must not inherit that session's identity (agents would all report and
  * resume the parent's session id). The GitHub token is never passed to agents or validation commands.
  */
 export function childEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  const env: NodeJS.ProcessEnv = { ...process.env };
   for (const k of INHERITED_SESSION_VARS) delete env[k];
   delete env.ORCH_GITHUB_TOKEN;
   delete env.ORCH_GIT_TOKEN;
-  return env;
+  // The orchestrator's own Node settings must not leak into the project's tooling: NODE_ENV=production
+  // makes React load its production build (no act()) and makes npm skip devDependencies (no Jest).
+  // Test runners and bundlers set NODE_ENV themselves.
+  delete env.NODE_ENV;
+  if (env.NODE_OPTIONS?.trim() === '--disable-warning=ExperimentalWarning') delete env.NODE_OPTIONS;
+  return { ...env, ...extra };
 }
 
 export const STDOUT_FILE = 'stdout.ndjson';

@@ -271,3 +271,30 @@ describe('validation detection', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe('child environment', () => {
+  it('does not leak the orchestrator NODE_ENV, Node options, session ids or tokens', async () => {
+    const { childEnv } = await import('../src/runner.ts');
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      NODE_ENV: 'production',
+      NODE_OPTIONS: '--disable-warning=ExperimentalWarning',
+      CLAUDE_CODE_SESSION_ID: 'parent',
+      ORCH_GITHUB_TOKEN: 'ghp_secret',
+      KEEP_ME: '1',
+    });
+    try {
+      const env = childEnv({ CI: '1' });
+      expect(env.NODE_ENV).toBeUndefined();
+      expect(env.NODE_OPTIONS).toBeUndefined();
+      expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined();
+      expect(env.ORCH_GITHUB_TOKEN).toBeUndefined();
+      expect(env.KEEP_ME).toBe('1');
+      expect(env.CI).toBe('1');
+      process.env.NODE_OPTIONS = '--max-old-space-size=8192';
+      expect(childEnv().NODE_OPTIONS).toBe('--max-old-space-size=8192');
+    } finally {
+      process.env = saved;
+    }
+  });
+});
