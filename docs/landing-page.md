@@ -28,7 +28,7 @@ The public Kanbuild marketing site. It is a static, multi-page Vite + React + Ta
 | Constant | Source | Fallback |
 |---|---|---|
 | `DMG_URL` | `VITE_DMG_URL` at build time | `''` → `DOWNLOAD_URL` uses `RELEASES_URL` (GitHub releases/latest) |
-| `STRIPE_PAYMENT_LINK` | `VITE_STRIPE_LINK` at build time | `''` → disabled button |
+| `STRIPE_PAYMENT_LINK` | `VITE_STRIPE_LINK` at build time | `https://donate.stripe.com/7sYaEYesE3lS5Ss9QPao805` (an empty value shows a disabled button) |
 | `GITHUB_URL` | constant | — |
 
 Set them either by editing the defaults in `config.ts` or at build time: `VITE_DMG_URL=… VITE_STRIPE_LINK=… npm run landing:build`.
