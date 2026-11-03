@@ -86,7 +86,7 @@ function Footer({ home }: { home: string }) {
     <footer className="py-10">
       <Container className="flex flex-col items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
         <div className="flex items-center gap-2">
-          <Logo className="h-6 w-6 rounded-lg [&_svg]:h-3 [&_svg]:w-3" />
+          <Logo className="h-6 w-6" />
           <span>Kanbuild · MIT licensed · costs shown in the app are estimates</span>
         </div>
         <div className="flex items-center gap-4">

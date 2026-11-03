@@ -1,6 +1,6 @@
 # Web dashboard (`web/`)
 
-Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`, `theme.ts`, `api.ts`, `hooks.ts`, `lib/utils.ts`, `index.css`, `components/*.tsx`, `components/ui/*.tsx`, `vite.config.ts`, `tailwind.config.js`, `postcss.config.js`, `index.html`
+Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`, `theme.ts`, `api.ts`, `hooks.ts`, `lib/utils.ts`, `index.css`, `components/*.tsx`, `components/ui/*.tsx`, `vite.config.ts`, `tailwind.config.js`, `postcss.config.js`, `index.html`, `public/*`, `src/assets/logo.png`
 
 ## Stack
 
@@ -19,8 +19,8 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 - **Aliases:** `@` → `web/src`, `@shared` → `../shared`. Shared types are imported as `@shared/types.ts`.
 - **Dev:** Vite on `127.0.0.1:5173`, proxying `/api` and `/ws` (ws:true) to :4317.
 - **Checks:** there are no web tests and no linter. The only check is `npm run typecheck`.
-- `index.html`: title "Kanbuild", 🧩 SVG favicon.
-- **Branding:** the product name is **Kanbuild**. The sidebar mark is `components/Logo.tsx` (a placeholder `Bot` icon until the real logo lands; swap it there only).
+- `index.html`: title "Kanbuild". The favicon is `/favicon.png` (64 px) plus `/apple-touch-icon.png` (180 px), both from `web/public/`, which Vite copies into `web/dist` for the server to serve.
+- **Branding:** the product name is **Kanbuild**. The mark is `components/Logo.tsx`: an `<img>` of `src/assets/logo.png` (the robot in front of Kanban columns, 256 px, transparent, bundled by Vite), default `h-8 w-8`. The dashboard and the landing page both use it, so swap the logo there only. The favicons are separate PNGs made from the same artwork.
 
 ## Bootstrap (`main.tsx`)
 
@@ -54,7 +54,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 - `loadFeatures(pid)`.
 - `setSettings` (merges).
 
-**Pub/sub channels** (not stored): `onRunEvent`, `onRunUpdate`, `onNotification`. Run events and run lists live in component state; only `feature.run` is global.
+**Pub/sub channels** (not stored): `onRunEvent`, `onRunUpdate`, `onNotification`, `onTerminal` (`terminal.*` messages). Run events and run lists live in component state; only `feature.run` is global.
 
 **WebSocket client.** `connect()` (128-158):
 - Uses `ws(s)://host/ws`.
@@ -72,12 +72,13 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 | `project.*` | upsert/remove |
 | `settings.updated` | merge |
 | `notification` | listeners |
+| `terminal.updated` / `terminal.output` | `onTerminal` listeners |
 
 ## API client (`api.ts`)
 
 - `req(method, url, body)` fetches `/api${url}`.
 - On a non-2xx response it throws `ApiError(status, data.error, data)`. The parsed body is on `err.body`; for example `err.body.dirty` is used when removing a worktree.
-- The `api` object has one function per endpoint in [api.md](api.md): `settings`, `updateSettings`, `projects`, `validatePath`, `createProject`, `updateProject`, `deleteProject`, `features`, `createFeature`, `updateFeature`, `deleteFeature`, `reorder`, `cancel`, `retry`, `openEditor`, `reveal`, `session`, `openTerminal`, `followUp`, `launchPreview`, `removeWorktree`, `runs`, `changes`, `setDependencies`, `gate`, `continuePipeline`, `createPr`, `diff`, `catalog`, `searchFiles`, `validationPreview`, `githubStatus`, `setGithubToken`, `testNotification`, `events`, `report`.
+- The `api` object has one function per endpoint in [api.md](api.md): `settings`, `updateSettings`, `projects`, `validatePath`, `createProject`, `updateProject`, `deleteProject`, `features`, `createFeature`, `updateFeature`, `deleteFeature`, `reorder`, `cancel`, `retry`, `openEditor`, `reveal`, `session`, `openTerminal`, `terminalState`, `runTerminal`, `stopTerminal`, `clearTerminal`, `resetTerminalCwd`, `followUp`, `launchPreview`, `removeWorktree`, `runs`, `changes`, `setDependencies`, `gate`, `continuePipeline`, `createPr`, `diff`, `catalog`, `searchFiles`, `validationPreview`, `githubStatus`, `setGithubToken`, `testNotification`, `events`, `report`.
 - Types: `SettingsResponse`, `SessionInfo`, `LaunchPreview`, `ProjectInput`, `GateAction`.
 
 ## Layout and components
@@ -87,7 +88,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 The root has the `app-backdrop` (CSS "clouds").
 
 **Sidebar** (`w-64`, a floating `metal-glass` panel)
-- Brand: the `Logo` (`components/Logo.tsx`: a `metal-chrome` tile with the placeholder mark), "Kanbuild" in `chrome-text`, and a connection dot: "local backend connected" or "reconnecting…".
+- Brand: the `Logo` (`components/Logo.tsx`), "Kanbuild" in `chrome-text`, and a connection dot: "local backend connected" or "reconnecting…".
 - Project list (the active row is a `metal-raised` pill):
   - A gold `metal-gold` "N waiting" pill (from `needsAttention`).
   - A cyan dot chip for the active count.
@@ -158,10 +159,10 @@ The compact quick-add at the top of the Backlog column, built on the `Composer` 
 
 ### `BranchSwitcher.tsx` (project header)
 
-- A `GitBranch` chip showing `project.baseBranch`. Clicking it opens a popover (absolute panel; outside click or Esc closes it). Keyed by project ID in `App.tsx`, so it resets when switching projects.
+- A `GitBranch` chip showing a small "base" label and `project.baseBranch` (`aria-label` "Base branch for new features: …"). Clicking it opens a popover (absolute panel; outside click or Esc closes it). Keyed by project ID in `App.tsx`, so it resets when switching projects.
 - On every open it reloads branches via `api.validatePath(project.path)` (no dedicated endpoint) and marks the repo's checked-out branch.
 - A filter input narrows the list. Choosing a branch calls `api.updateProject(id, {baseBranch})`, then `upsertProject` and a toast. The server rejects unknown branches (toast error).
-- It only changes the ref **new** features branch from. Existing features keep `feature.baseRef`, and the repo's own checkout is never touched (no `git checkout`).
+- It only changes the ref **new** features branch from. Existing features keep `feature.baseRef`, and the repo's own checkout is never touched (no `git checkout`), so the user's IDE stays on its branch. The popover says so at the top, and its footer points to the feature's Terminal tab / Open in editor for trying a feature.
 
 ### `FeatureDialog.tsx`
 
@@ -232,6 +233,18 @@ The compact quick-add at the top of the Backlog column, built on the `Composer` 
    - Followed by the `DiffViewer`.
 5. **Tests / Validation**: for validator runs, a `<details>` per command (open when failed); otherwise the self-reported tests and build.
 6. **Report**: `report.markdown` rendered with `Markdown` in `.prose-report`.
+7. **Terminal** (`TerminalTab.tsx`): run shell commands in the feature's worktree (server: [git-worktrees-validation.md](git-worktrees-validation.md#terminal-command-runner-terminalts)).
+   - Header: the worktree path, "N running", Clear (finished sessions).
+   - One `metal-surface` block per command: `$ command`, a running badge + Stop, or duration + `exit N` / signal badge; output in a `<pre>` (max-h-96), "earlier output trimmed" when `outputStart > 0`. Auto-scrolls while the user is at the bottom.
+   - Current directory: `cd` persists (kept by the server). The prompt shows it before `$` via `displayDir()` (`<worktree-name>`, `<worktree-name>/server`, or an absolute path outside the worktree; `data-testid="terminal-cwd"`), with a ↺ button (`aria-label="Back to worktree root"`) when it isn't the root. `cwd`/`root` come from the backfill and from `terminal.updated` messages whose `endCwd` differs from the start dir. A command block shows its start dir when it isn't the root; a `cd` with no output shows "now in <dir>".
+   - Prompt: `$` input (`aria-label="Terminal command"`); Enter runs; ↑/↓ walk the history in localStorage `orch:termHistory` (50 max).
+   - **Command shortcuts** (chips above the prompt, `aria-label="Command shortcuts"`): clicking one runs it.
+     - `DEFAULT_PRESETS` = `git status`, always first and not removable.
+     - The user's saved shortcuts live in localStorage `orch:termPresets:<projectId>` (per project, per browser, 30 max, deduped). Each has a × on hover/focus (`Remove shortcut <cmd>`).
+     - The round **+** chip (`Add command shortcut`) enters save mode: the input's placeholder becomes "Save a command" (`aria-label="Command to save"`), the + turns into a **Save** chip (disabled until something is typed) with a cancel ×, and the run ↵ button is hidden. Enter saves. In save mode the input works even while the agent is running.
+     - Esc cancels save mode **without closing the sheet**: a window capture `keydown` listener calls `preventDefault()` before Radix's document listener, which then skips dismissing. React's `stopPropagation` is too late for this.
+   - Disabled with a hint when there is no worktree or the agent is active (`isActive(feature.agentStatus)`).
+   - Sync: subscribes to `onTerminal` **before** the backfill fetch, and re-fetches whenever `connected` flips (missed WS messages aren't replayed). Chunks merge by `offset` (`applyChunk`), and the backfill merge keeps sessions it doesn't list and never downgrades an exited session to running.
 
 ### `GatePanel.tsx`
 
@@ -296,7 +309,7 @@ Rendered as an Emergent "agent has questions" card: a gold-glow `metal-surface` 
 
 ### UI primitives (`components/ui/`)
 
-The landing page (`landing/`) imports these, plus `Logo.tsx`, `lib/utils.ts` and `index.css`, directly through its `@` → `web/src` alias. Keep them free of dashboard-only imports (store, api), or the landing build breaks. See [landing-page.md](landing-page.md).
+The landing page (`landing/`) imports these, plus `Logo.tsx` (and its `assets/logo.png`), `lib/utils.ts` and `index.css`, directly through its `@` → `web/src` alias. Keep them free of dashboard-only imports (store, api), or the landing build breaks. See [landing-page.md](landing-page.md).
 
 | File | Contents |
 |---|---|
@@ -372,7 +385,7 @@ Under `prefers-reduced-motion`, these animations collapse to 1 ms (spinners and 
 1. **Hooks must run unconditionally.** A conditional `useStore` in App.tsx once blanked the dashboard (fixed in 7ddcbe2, which also added ErrorBoundary).
 2. **Stable selector results only.** A selector that returns a fresh `[]` or `{}` causes a render loop.
 3. **Version banner:** bump `API_VERSION` in `shared/types.ts` for coordinated changes. The server sends `index.html` with no-cache, so a reload picks up a rebuilt dashboard.
-4. **localStorage keys:** `orch:lastProject`, `orch:diffMode` and `orch:theme`. Every access is wrapped in try/catch.
+4. **localStorage keys:** `orch:lastProject`, `orch:diffMode`, `orch:theme`, `orch:termHistory` and `orch:termPresets:<projectId>`. Every access is wrapped in try/catch.
 5. **No UI action merges branches.** Create PR pushes the branch and opens a PR.
 6. Costs are always labeled "est.".
 7. **Textareas with `bg-none`** (no metal gradient) also need `bg-transparent`, or the browser's dark form-field color shows through.

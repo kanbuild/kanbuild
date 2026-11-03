@@ -46,6 +46,7 @@ import { Chip } from './ui/chip';
 import { Composer, composerTextareaClass, type ComposerSuggestion } from './ui/composer';
 import { GatePanel } from './GatePanel';
 import { PipelineTab } from './PipelineTab';
+import { TerminalTab } from './TerminalTab';
 import { Textarea } from './ui/input';
 import { MentionTextarea } from './MentionTextarea';
 import { confirm } from './confirm';
@@ -664,6 +665,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
               <TabsTrigger value="changes"><FolderGit2 className="h-3.5 w-3.5" /> Changes</TabsTrigger>
               <TabsTrigger value="tests">{run?.role === 'validator' ? <ListChecks className="h-3.5 w-3.5" /> : <FlaskConical className="h-3.5 w-3.5" />} {run?.role === 'validator' ? 'Validation' : 'Tests'}</TabsTrigger>
               <TabsTrigger value="report"><FileText className="h-3.5 w-3.5" /> Report</TabsTrigger>
+              <TabsTrigger value="terminal"><SquareTerminal className="h-3.5 w-3.5" /> Terminal</TabsTrigger>
             </TabsList>
           </div>
 
@@ -775,6 +777,10 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
 
           <TabsContent value="changes" className="min-h-0 flex-1">
             <ChangesView feature={feature} runStatus={run?.status} focus={focus} />
+          </TabsContent>
+
+          <TabsContent value="terminal" className="min-h-0 flex-1">
+            <TerminalTab feature={feature} agentActive={isActive(feature.agentStatus)} />
           </TabsContent>
 
           <TabsContent value="tests" className="min-h-0 flex-1 overflow-y-auto">

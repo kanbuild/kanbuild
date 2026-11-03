@@ -14,6 +14,8 @@ import type {
   Run,
   RunEvent,
   Settings,
+  TerminalSession,
+  TerminalState,
 } from '@shared/types.ts';
 
 export class ApiError extends Error {
@@ -107,6 +109,11 @@ export const api = {
   reveal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/reveal`, {}),
   session: (id: string) => req<SessionInfo>('GET', `/features/${id}/session`),
   openTerminal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/open-terminal`, {}),
+  terminalState: (id: string) => req<TerminalState>('GET', `/features/${id}/terminal`),
+  resetTerminalCwd: (id: string) => req<{ cwd: string | null }>('DELETE', `/features/${id}/terminal/cwd`),
+  runTerminal: (id: string, command: string) => req<TerminalSession>('POST', `/features/${id}/terminal`, { command }),
+  stopTerminal: (sessionId: string) => req<TerminalSession>('POST', `/terminal/${sessionId}/stop`, {}),
+  clearTerminal: (id: string) => req<TerminalSession[]>('DELETE', `/features/${id}/terminal`),
   startFeature: (id: string) => req<Feature>('POST', `/features/${id}/start`),
   followUp: (id: string, message: string) => req<Feature>('POST', `/features/${id}/followup`, { message }),
   launchPreview: (projectId: string) => req<LaunchPreview>('GET', `/projects/${projectId}/launch-preview`),

@@ -1,6 +1,6 @@
 # Landing page (`landing/`)
 
-Source files: `landing/index.html`, `landing/donate/index.html`, `landing/src/*.tsx`, `landing/src/config.ts`, `landing/vite.config.ts`, `landing/tailwind.config.js`, `landing/package.json`
+Source files: `landing/index.html`, `landing/donate/index.html`, `landing/src/*.tsx`, `landing/src/config.ts`, `landing/vite.config.ts`, `landing/tailwind.config.js`, `landing/package.json`, `landing/public/*`
 
 The public Kanbuild marketing site. It is a static, multi-page Vite + React + Tailwind app with no router and no backend. You host it yourself on any static host. It is **not** served by the Kanbuild backend.
 
@@ -40,7 +40,8 @@ The look follows the dashboard's Emergent-inspired metallic system (reference: E
 - The Vite alias `@` points at **`../web/src`**, and the tsconfig `paths` match. The landing page imports the dashboard's `@/components/ui/button`, `badge`, `progress`, `@/components/Logo`, `@/theme` and `@/lib/utils` directly. Those files import `@/lib/utils`, which resolves the same way.
 - `@/index.css` (the zinc HSL tokens, `.dark`, radius) is imported in `boot.tsx` and processed with the landing page's own PostCSS/Tailwind config.
 - `tailwind.config.js` uses the dashboard config as a `preset`, and its `content` includes `../web/src/components/**`. The preset brings the `gold` / `metal` colors and the `glow` / `gold-glow` shadows, so the classes used by shared components are generated.
-- Changing a token or primitive in `web/` restyles both. Swapping `web/src/components/Logo.tsx` changes the logo everywhere.
+- Changing a token or primitive in `web/` restyles both. Swapping `web/src/components/Logo.tsx` (and `web/src/assets/logo.png`) changes the logo everywhere.
+- Favicons: `landing/public/favicon.png` and `apple-touch-icon.png` (copies of the dashboard's). They are linked relatively (`./` from home, `../` from `/donate/`) because of `base: './'`.
 
 ## Commands
 

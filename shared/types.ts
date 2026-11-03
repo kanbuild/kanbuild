@@ -4,7 +4,7 @@
  * Bumped whenever the backend and the dashboard must be updated together. The dashboard shows a
  * "rebuild/reload" banner when its compiled value differs from the backend's.
  */
-export const API_VERSION = 7;
+export const API_VERSION = 9;
 
 export type Priority = 'low' | 'medium' | 'high';
 export type FeatureStatus = 'backlog' | 'build' | 'done';
@@ -439,4 +439,32 @@ export type ServerMessage =
   | { type: 'project.updated'; project: Project }
   | { type: 'project.deleted'; projectId: string }
   | { type: 'settings.updated'; settings: Settings }
-  | { type: 'notification'; notification: AppNotification };
+  | { type: 'notification'; notification: AppNotification }
+  | { type: 'terminal.updated'; session: TerminalSession }
+  | { type: 'terminal.output'; sessionId: string; featureId: string; offset: number; chunk: string };
+
+/** A shell command run from the dashboard's Terminal tab in a feature's worktree (in memory, not persisted). */
+export interface TerminalSession {
+  id: string;
+  featureId: string;
+  cwd: string;
+  command: string;
+  status: 'running' | 'exited';
+  exitCode: number | null;
+  signal: string | null;
+  pid: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  /** Directory the shell ended in (set on a normal exit); the feature's next command starts there. */
+  endCwd: string | null;
+  /** Buffered output (ANSI stripped), capped; `outputStart` = how many chars were dropped from the front. */
+  output: string;
+  outputStart: number;
+}
+
+/** `GET /features/:id/terminal`: sessions plus where the next command runs. */
+export interface TerminalState {
+  sessions: TerminalSession[];
+  cwd: string | null;
+  root: string | null;
+}

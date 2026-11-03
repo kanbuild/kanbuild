@@ -49,7 +49,7 @@ Backend: Node + Express + ws (server/src/index.ts), run by tsx, no build step
    - `setClientCounter` tells notify.ts how many tabs are open.
 5. After `listen`: log the URL and data dir, then `orchestrator.recover()` (index.ts:120-124).
    - If the port is taken (`EADDRINUSE`, index.ts:100-118), the server probes `GET /api/settings` on that port. If an orchestrator answers, it says a backend is already running (the Mac app or another `npm start`) and how to find it with `lsof`; otherwise it says another program holds the port and suggests `ORCH_PORT`. Either way it exits with code 1 and no stack trace.
-6. SIGINT/SIGTERM → `orchestrator.shutdown()` (stops tails/timers, cancels validations), close, exit. **Agents keep running.**
+6. SIGINT/SIGTERM → `orchestrator.shutdown()` (stops tails/timers, cancels validations), `stopAllTerminalCommands()` (kills Terminal-tab commands), close, exit. **Agents keep running.**
 
 ## Event bus (`server/src/events.ts`)
 

@@ -19,7 +19,7 @@ You register git repos as *projects* and add *feature* cards. Dragging a card in
 runs headless Claude Code agents (`claude -p --output-format stream-json`) in an isolated
 git worktree and branch. They run through a configurable pipeline:
 plan → approve plan → develop → validate ⇄ fix → test → review ⇄ fix → final approval → Done → (optional) GitHub PR.
-The dashboard streams progress, tokens and cost estimates, diffs and reports live. Branches are never merged automatically.
+The dashboard streams progress, tokens and cost estimates, diffs and reports live, and has a per-feature Terminal tab that runs commands in the worktree. Branches are never merged automatically.
 It ships two ways: the web version (`npm start` + browser) and a **macOS app** (Electron, `desktop/`) that runs the same backend. MIT licensed.
 
 Monorepo layout (npm workspaces, Node ≥ 22.13 for `node:sqlite`):
@@ -59,7 +59,7 @@ npm run desktop:dev         # Mac app from source (Electron); desktop:dist packa
 | [docs/pipeline.md](docs/pipeline.md) | Feature and run state machines, `nextStep` rules, cycles, fix loops, gates, retry/continue/follow-up/cancel |
 | [docs/orchestrator-and-agents.md](docs/orchestrator-and-agents.md) | Scheduling (`tick`), prompt and session choice per run kind, detached runner, child env, stall watchdog, CLI flags (`launch.ts`), stream parser |
 | [docs/prompts-and-reports.md](docs/prompts-and-reports.md) | Prompt builders, role markers, report JSON schemas, test-hang rules, `@file` refs, self-report parsing, markdown reports |
-| [docs/git-worktrees-validation.md](docs/git-worktrees-validation.md) | Branch and worktree naming, changes and diffs, diff parser, dependency stacking, validation command detection and running |
+| [docs/git-worktrees-validation.md](docs/git-worktrees-validation.md) | Branch and worktree naming, changes and diffs, diff parser, dependency stacking, validation command detection and running, Terminal command runner |
 | [docs/github-prs.md](docs/github-prs.md) | GitHub token, authenticated push, remote parsing, PR creation flow and PR body |
 | [docs/capabilities-catalog.md](docs/capabilities-catalog.md) | MCP server and skill discovery, redaction, per-run MCP config and skills plugin, allow/deny rules |
 | [docs/settings-projects-features.md](docs/settings-projects-features.md) | Global settings, project config and defaults, feature CRUD and moves, dependencies, editor, notifications, pricing |
@@ -72,7 +72,7 @@ npm run desktop:dev         # Mac app from source (Electron); desktop:dist packa
 
 - **Migrations are append-only.** Never edit an entry in `MIGRATIONS` (`server/src/db.ts`); append a new one.
   The current schema version is 5. Update `docs/data-model.md`.
-- **Bump `API_VERSION`** (`shared/types.ts`, now 7) whenever the backend and dashboard must change together.
+- **Bump `API_VERSION`** (`shared/types.ts`, now 9) whenever the backend and dashboard must change together.
   The UI shows a reload banner on a mismatch.
 - **Imports use explicit `.ts` extensions** (`allowImportingTsExtensions`). Shared types are imported as `@shared/types.ts` in web.
 - **The pipeline is a pure function of the DB** (`pipeline.ts` `nextStep` over the cycle's runs and stored reports).

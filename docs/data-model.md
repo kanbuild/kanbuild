@@ -116,7 +116,7 @@ Deleting a project cascades to its features, runs, run_events and dependencies.
 ## Key types (`shared/types.ts`)
 
 **Versioning**
-- `API_VERSION = 7` (line 7; 7 added `autoStartBuild`, `pipeline.autoStart` and `POST /features/:id/start`). Bump it when the backend and dashboard must change together.
+- `API_VERSION = 9` (line 7; 9 made `cd` persist in the Terminal tab: `endCwd`, `TerminalState` and `DELETE /features/:id/terminal/cwd`; 8 added the Terminal tab: `TerminalSession`, the `terminal.*` WS messages and `/features/:id/terminal` endpoints; 7 added `autoStartBuild`, `pipeline.autoStart` and `POST /features/:id/start`). Bump it when the backend and dashboard must change together.
 
 **Status and role enums**
 - `FeatureStatus` = `backlog | build | done`. This is the Kanban column.
@@ -192,7 +192,8 @@ Deleting a project cascades to its features, runs, run_events and dependencies.
 - `AppNotification {id, title, body, level: info|success|attention|error, featureId, projectId, ts}`.
 - Catalog types: `McpServerInfo` (scope `user|local|project|plugin|claude.ai`, `launchable`), `SkillInfo`, `Catalog`.
 - `PathValidation`.
-- `ServerMessage` (lines 430-438): see [api.md](api.md#websocket).
+- `ServerMessage` (lines 434-444): see [api.md](api.md#websocket).
+- `TerminalSession {id, featureId, cwd, command, status: running|exited, exitCode, signal, pid, startedAt, endedAt, endCwd, output, outputStart}` (in memory, never in SQLite). `cwd` is the start dir; `endCwd` is where the shell ended (null when killed by a signal). `TerminalState {sessions, cwd, root}` is the GET response. `output` is capped at 200k chars; `outputStart` counts chars dropped from the front.
 
 ## Positions
 
