@@ -26,7 +26,7 @@ import { FeatureComposer } from './FeatureComposer';
 import { FeatureCardView, SortableFeatureCard } from './FeatureCard';
 import { confirm } from './confirm';
 import { toast, toastError } from './toast';
-import { isActive } from './status';
+import { isActive, isReadyToStart } from './status';
 
 const COLUMNS: { id: FeatureStatus; title: string; icon: React.ElementType; hint: string }[] = [
   { id: 'backlog', title: 'Backlog', icon: Inbox, hint: 'Drag a card into Build to start an agent' },
@@ -128,7 +128,10 @@ function Column({
 export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen: (f: Feature) => void; onAdd: () => void }) {
   const allFeatures = useStore((s) => s.features);
   const concurrency = useStore((s) => s.settings?.concurrency ?? 2);
-  const loaded = useStore((s) => s.loadedProjects.has(projectId));
+  // Primitives only, so the selectors stay stable.
+  const projectAutoStart = useStore((s) => s.projects.find((p) => p.id === projectId)?.pipeline.autoStart ?? null);
+  const globalAutoStart = useStore((s) => s.settings?.autoStartBuild ?? true);
+  const autoStart = projectAutoStart ?? globalAutoStart;
   const features = useMemo(() => {
     const out: Record<string, Feature> = {};
     for (const f of Object.values(allFeatures)) if (f.projectId === projectId) out[f.id] = f;
@@ -198,7 +201,7 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
           });
           if (!confirmCancel) return setCols(serverCols);
         }
-        if (col === 'build' && startCol === 'done') {
+        if (col === 'build' && startCol === 'done' && autoStart) {
           const ok = await confirm({
             title: 'Start a new agent run?',
             description: `"${feature.title}" will be developed again in its existing worktree (${feature.branch ?? 'new branch'}).`,
@@ -208,7 +211,7 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
         }
         const updated = await api.updateFeature(id, { status: col, confirmCancel });
         upsertFeature(updated);
-        if (col === 'build') toast(`Agent queued for "${feature.title}"`);
+        if (col === 'build' && updated.agentStatus === 'queued') toast(`Agent queued for "${feature.title}"`);
       }
       await api.reorder(projectId, col, nextIds);
     } catch (err) {
@@ -219,6 +222,10 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
 
   const running = Object.values(features).filter((f) => f.agentStatus === 'running' || f.agentStatus === 'initialising').length;
   const queued = Object.values(features).filter((f) => f.agentStatus === 'queued').length;
+  const ready = Object.values(features).filter(isReadyToStart).length;
+  const buildStats = [running || queued ? `${running} running · ${queued} queued · limit ${concurrency} concurrent (global)` : '', ready ? `${ready} ready to start` : '']
+    .filter(Boolean)
+    .join(' · ');
   const activeFeature = activeId ? features[activeId] : null;
 
   return (
@@ -233,15 +240,6 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
         setCols(serverCols);
       }}
     >
-      {loaded && Object.keys(features).length === 0 ? (
-        <div className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto p-8">
-          <div className="text-center">
-            <h2 className="chrome-text text-3xl font-semibold tracking-tight sm:text-4xl">What should the agents build next?</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Add a feature to the backlog, then drag it into Build to start an agent.</p>
-          </div>
-          <FeatureComposer projectId={projectId} hero onMore={onAdd} />
-        </div>
-      ) : (
       <div className="flex h-full min-h-0 gap-3 overflow-x-auto p-4">
         {COLUMNS.map((c) => (
           <Column
@@ -251,16 +249,20 @@ export function Board({ projectId, onOpen, onAdd }: { projectId: string; onOpen:
             features={features}
             onOpen={onOpen}
             onAdd={c.id === 'backlog' ? onAdd : undefined}
-            stats={
-              c.id === 'build' && (running || queued)
-                ? `${running} running · ${queued} queued · limit ${concurrency} concurrent (global)`
-                : undefined
+            hint={
+              autoStart
+                ? c.hint
+                : c.id === 'backlog'
+                  ? 'Drag a card into Build, then press ▶ to start its agent'
+                  : c.id === 'build'
+                    ? 'Press ▶ on a card to start its agent'
+                    : c.hint
             }
+            stats={c.id === 'build' && buildStats ? buildStats : undefined}
             composer={c.id === 'backlog' ? <FeatureComposer projectId={projectId} onMore={onAdd} /> : undefined}
           />
         ))}
       </div>
-      )}
       <DragOverlay>{activeFeature ? <FeatureCardView feature={activeFeature} dragging /> : null}</DragOverlay>
     </DndContext>
   );

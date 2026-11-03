@@ -165,7 +165,8 @@ api.patch('/features/:id', h(async (req) => {
   }
   if (status && status !== feature.status) {
     if (status === 'build') {
-      feature = orchestrator.startFeature(id);
+      // Starts the agent, or (auto-start off) leaves the card waiting for POST /features/:id/start.
+      feature = orchestrator.enterBuild(id, typeof position === 'number' ? position : undefined);
     } else {
       if (isActive(id)) {
         if (!confirmCancel) throw new HttpError(409, 'An agent is working on this feature. Confirm to cancel it.');
@@ -215,6 +216,7 @@ api.get('/features/:id/diff', h(async (req) => {
   return getDiff(f.worktreePath, f.baseRef || p.baseBranch, scope as DiffScope, file);
 }));
 api.post('/features/:id/cancel', h((req) => orchestrator.cancel(req.params.id)));
+api.post('/features/:id/start', h((req) => orchestrator.startFeature(req.params.id)));
 api.post('/features/:id/retry', h((req) => orchestrator.retry(req.params.id)));
 api.get('/features/:id/runs', h((req) => listRunsForFeature(req.params.id)));
 

@@ -109,11 +109,13 @@ The root has the `app-backdrop` (CSS "clouds").
 
 ### `Board.tsx`
 
-**Empty project:** once the project's features are loaded (`loadedProjects`) and there are none, the board is replaced by a hero: "What should the agents build next?" plus a `FeatureComposer hero`.
+The board always shows its three columns, even for an empty project.
+
+**Auto-start:** `autoStart = project.pipeline.autoStart ?? settings.autoStartBuild`, read with primitive store selectors. When it is off, the Backlog and Build hints mention ▶.
 
 **Columns** (translucent `metal-glass` trays; a drop target gets `shadow-glow`):
 - **Backlog**: "Drag a card into Build to start an agent". It has the only + button, and a compact `FeatureComposer` ("Quick add a feature…") at the top that expands on focus.
-- **Build**: "X running · Y queued · limit N concurrent (global)".
+- **Build**: "X running · Y queued · limit N concurrent (global) · Z ready to start" (`isReadyToStart`).
 - **Done**.
 
 Cards are sorted by `position`, then `createdAt`.
@@ -124,17 +126,16 @@ Cards are sorted by `position`, then `createdAt`.
 - `columnFirstCollision` (46-58) gives the column under the pointer priority over cards.
 - `onDragEnd`:
   1. Leaving Build with an active agent → destructive confirm, then `confirmCancel:true`.
-  2. Done → Build → confirm "Start a new agent run?".
-  3. `api.updateFeature({status})`, then `api.reorder`.
+  2. Done → Build → confirm "Start a new agent run?" (only when auto-start is on; otherwise the card just waits).
+  3. `api.updateFeature({status})`, then `api.reorder`. The "Agent queued" toast shows only if the returned feature is `queued`.
   4. On an error or a declined confirm, reset to the server columns.
 
 ### `FeatureComposer.tsx`
 
-Emergent's prompt composer, used to quick-add a backlog feature.
-- Priority "folder tabs" (Low / Normal / High) sit on top of a `metal-surface` card holding a title input (`aria-label="Feature title"`) and a `MentionTextarea` description. The compact version only shows the title until focused.
-- **Cmd/Ctrl+Enter** or the round accent arrow calls `api.createFeature(projectId, {title, description, priority})`, the same call as `FeatureDialog`. Errors go to `toastError`.
+The compact quick-add at the top of the Backlog column, built on the `Composer` primitive.
+- It shows a one-line title input (`aria-label="Feature title"`) until focused. It then expands into priority "folder tabs" (Low / Normal / High), a `MentionTextarea` description and the footer.
+- **Cmd/Ctrl+Enter** or the round accent arrow calls `api.createFeature(projectId, {title, description, priority})`, the same call as `FeatureDialog`. Errors go to `toastError`. Esc on an empty composer collapses it.
 - "More options" opens the full `FeatureDialog` (dependencies…).
-- `hero` adds suggestion `Chip`s ("Add tests for", "Fix bug", "Refactor", "Update docs for") that prefill the title.
 
 ### `FeatureCard.tsx` + `status.tsx`
 
@@ -143,6 +144,8 @@ Emergent's prompt composer, used to quick-add a backlog feature.
 - The PR link is a green pill.
 - Shows: status badge, `PipelineChip`, `runLabel · #attempt`, `RunProgress`, current activity, error, duration, tokens, cost, branch.
 - PR link: its pointerdown is stopped so it doesn't start a drag.
+- **Ready to start** (`isReadyToStart`: in Build, no `agentStatus`, no gate; only happens with auto-start off): a gray "Ready to start" badge and a round accent ▶ button (`aria-label="Start build"`) instead of the status badge. Its pointerdown and keydown are stopped. A click calls `api.startFeature`. `RunProgress` renders nothing for a ready card, so the previous cycle's bar is hidden.
+- Note for tests: the sortable wrapper has `role="button"` (dnd-kit attributes), so its accessible name contains the card text, including "Start build". Match the ▶ button with `exact: true`.
 
 **`status.tsx` helpers**
 - `isActive`, `isPaused` (build + completed + no gate → needs "Continue"), `isWaiting`, `needsAttention` (waiting, or Build + failed).
@@ -167,7 +170,9 @@ Emergent's prompt composer, used to quick-add a backlog feature.
 - name, base branch (select), description, worktree dir, model, agent profile, effort
 - `CapabilitiesPicker`
 - "Advanced: extra MCP config"
-- **Pipeline** toggles: Plan, Approve plan (needs Plan), Validate, Tester, Reviewer, Final approval. Also:
+- **Pipeline**:
+  - "When a card enters Build" select: use the global setting (the label shows its current value) → `autoStart: null`, start automatically → `true`, or wait for ▶ → `false`.
+  - Toggles: Plan, Approve plan (needs Plan), Validate, Tester, Reviewer, Final approval. Also:
   - validation commands, one per line (the hint shows the auto-detected ones)
   - max fix rounds, git remote, draft PRs, auto-create PR
 - **Agent roles:** model and effort per role.
@@ -183,7 +188,7 @@ Emergent's prompt composer, used to quick-add a backlog feature.
 - The early `return null` (around line 495) comes **after all hooks**.
 
 **Header actions**
-- Edit, Cancel agent, Retry `<step>`, Continue pipeline (when paused, a `gold` button), Stop pipeline (when gated).
+- Edit, Start build (when `isReadyToStart`), Cancel agent, Retry `<step>`, Continue pipeline (when paused, a `gold` button), Stop pipeline (when gated).
 - PR #N link, or Create PR (needs a GitHub token).
 - Open in editor, Delete.
 - A run selector when there is more than one run.
@@ -192,11 +197,14 @@ Emergent's prompt composer, used to quick-add a backlog feature.
 
 **Tabs**
 1. **Overview**
+   - **Finished features open on the chat composer.** `continueFirst` is true when nothing is active, there is no gate, the feature is not paused, and it is Done or completed. `ContinueSession` then renders first, above the progress. Otherwise it stays below the stats (for example failed or cancelled). It renders once either way.
    - Stage and progress, activity, error.
    - `ReviewSection`: findings with file:line links that jump to the Changes tab.
    - Plan, questions.
    - Stats grid: duration, new tokens, est. cost, model, turns, context, cache reads, denials, token breakdown.
-   - `ContinueSession`: send a follow-up (Cmd/Ctrl+Enter); shows the terminal resume command, Copy, and Open in Terminal (macOS).
+   - `ContinueSession`, "Keep working on this feature": a `Composer` with a `MentionTextarea` (`aria-label="Follow-up message"`) and suggestion chips ("Add tests for ", "Fix a bug: ", "Refactor ", "Update docs for ") that prefill the message.
+     - Cmd/Ctrl+Enter or the arrow calls `api.followUp`. A follow-up always starts right away, even with auto-start off.
+     - A collapsed `<details>` "Continue in a terminal instead" holds the resume command, Copy and Open in Terminal (macOS).
    - The run message, description, metadata.
 2. **Pipeline** (`PipelineTab.tsx`)
    - Step chain from the config: Plan → Approve plan → Develop/Follow-up (+ N fix rounds) → Validate → Tests → Review → Your approval → Done.
@@ -249,7 +257,9 @@ Rendered as an Emergent "agent has questions" card: a gold-glow `metal-surface` 
 ### `SettingsDialog.tsx`
 
 **Fields**
-- Agent profile (with `PROFILE_HELP`), effort, budget per run, max concurrent agents (1-16), default model.
+- Agent profile (with `PROFILE_HELP`), effort, budget per run, max concurrent agents (1-16).
+- "Start the agent automatically when a card is moved into Build" (`autoStartBuild`).
+- Default model.
 - Editor: a preset or a custom command.
 - Claude binary.
 
@@ -282,6 +292,7 @@ Rendered as an Emergent "agent has questions" card: a gold-glow `metal-surface` 
 |---|---|
 | `button.tsx` | variants default (`metal-accent`), destructive (`metal-danger`), outline / secondary (`metal-raised`), `chrome` (graphite pill), `gold` (attention CTA), ghost, link; sizes default, sm, lg, icon, `pill`, `icon-round`; `asChild` |
 | `badge.tsx` | rounded-full pills: default, secondary, outline, red, amber, green, blue, violet, `gold`, gray (with dark variants); `dot` adds a leading status dot |
+| `composer.tsx` | `Composer({tabs, children, footerLeft, hint, onSend, canSend, sending, sendLabel, showFooter, suggestions, onSuggest, size})`: Emergent prompt card with a round send arrow and optional suggestion chips; `composerTextareaClass` makes a borderless textarea for it |
 | `chip.tsx` | `Chip({active, dot, icon})`: rounded-full `metal-raised` button for suggestions, filters and step chips |
 | `dialog.tsx` | `DialogContent` (centered, max-w-lg, `metal-surface rounded-2xl`, blurred overlay), `SheetContent` (right side, `sm:max-w-3xl`), round chrome close button, header, footer, title, description |
 | `tabs.tsx` | Radix tabs styled as folder tabs: a hairline baseline, the active tab is a raised metal tab |

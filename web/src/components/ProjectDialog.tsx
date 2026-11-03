@@ -23,6 +23,7 @@ export const DEFAULT_PIPELINE: PipelineConfig = {
   maxFixLoops: 2,
   autoCreatePr: false,
   prDraft: true,
+  autoStart: null,
   remote: 'origin',
 };
 
@@ -70,6 +71,7 @@ export function ProjectDialog({
   const [mcpServers, setMcpServers] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const globalProfile = useStore((s) => s.settings?.agentProfile ?? 'lean');
+  const globalAutoStart = useStore((s) => s.settings?.autoStartBuild ?? true);
   const [pipeline, setPipeline] = useState<PipelineConfig>(DEFAULT_PIPELINE);
   const [validationText, setValidationText] = useState('');
   const [detected, setDetected] = useState<{ commands: string[]; source: string } | null>(null);
@@ -246,6 +248,16 @@ export function ProjectDialog({
           <fieldset className="metal-surface space-y-3 rounded-xl p-3">
             <legend className="px-1 text-sm font-semibold">Pipeline</legend>
             <p className="text-[11px] text-muted-foreground">What happens after a card enters Build. Every step runs in the feature&apos;s worktree; branches are never merged.</p>
+            <Field label="When a card enters Build" hint="Waiting cards show a ▶ button on the board. Follow-ups, retries and approvals always start right away.">
+              <Select
+                value={pipeline.autoStart === null ? '' : pipeline.autoStart ? 'auto' : 'manual'}
+                onChange={(e) => setP({ autoStart: e.target.value === '' ? null : e.target.value === 'auto' })}
+              >
+                <option value="">Use global setting (currently: {globalAutoStart ? 'start automatically' : 'wait for ▶'})</option>
+                <option value="auto">Start the agent automatically</option>
+                <option value="manual">Wait for ▶ Start</option>
+              </Select>
+            </Field>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Toggle checked={pipeline.plan} onChange={(v) => setP({ plan: v })} label="1. Plan first" hint="A read-only planner writes an implementation plan." />
               <Toggle checked={pipeline.planApproval} disabled={!pipeline.plan} onChange={(v) => setP({ planApproval: v })} label="Approve the plan" hint="Pause until you approve or comment on the plan." />

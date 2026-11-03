@@ -1,10 +1,16 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Coins, GitBranch, GitPullRequest, Link2, Timer, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Coins, GitBranch, GitPullRequest, Link2, Play, Timer, Zap } from 'lucide-react';
 import type { Feature } from '@shared/types.ts';
 import { cn, formatCost, formatDuration, formatTokens } from '@/lib/utils';
 import { useNow } from '@/hooks';
-import { AgentStatusBadge, PipelineChip, isWaiting, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, runLabel, totalTokens } from './status';
+import { api } from '@/api';
+import { upsertFeature } from '@/store';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { toast, toastError } from './toast';
+import { AgentStatusBadge, PipelineChip, isReadyToStart, isWaiting, PriorityBadge, RunProgress, isActive, newTokens, runCost, runDurationMs, runLabel, totalTokens } from './status';
 
 export function FeatureCardView({ feature, dragging, onClick }: { feature: Feature; dragging?: boolean; onClick?: () => void }) {
   const run = feature.run;
@@ -14,6 +20,20 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
   const duration = runDurationMs(run, now);
   const blocked = feature.blockedBy.length > 0 && feature.status !== 'done';
   const multi = (feature.totals?.runs ?? 0) > 1;
+  const ready = isReadyToStart(feature);
+  const [starting, setStarting] = useState(false);
+  const start = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStarting(true);
+    try {
+      upsertFeature(await api.startFeature(feature.id));
+      toast(`Agent queued for "${feature.title}"`);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setStarting(false);
+    }
+  };
   return (
     <div
       onClick={onClick}
@@ -43,10 +63,30 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
         <div className="mt-2.5 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
-              {!isWaiting(feature) && <AgentStatusBadge status={feature.agentStatus} />}
+              {ready ? (
+                <Badge variant="gray" dot title="Auto-start is off for this project: press ▶ to start the agent">
+                  Ready to start
+                </Badge>
+              ) : (
+                !isWaiting(feature) && <AgentStatusBadge status={feature.agentStatus} />
+              )}
               <PipelineChip feature={feature} />
             </div>
-            {run && run.attempt > 1 && (
+            {ready && (
+              <Button
+                size="icon-round"
+                className="h-7 w-7 [&_svg]:size-3.5"
+                onClick={start}
+                onPointerDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                disabled={starting}
+                aria-label="Start build"
+                title="Start the agent"
+              >
+                <Play className="translate-x-px fill-current" />
+              </Button>
+            )}
+            {!ready && run && run.attempt > 1 && (
               <span className="text-[10px] text-muted-foreground" title={`Run #${run.attempt}, pipeline cycle ${run.cycle}`}>
                 {runLabel(run)} · #{run.attempt}
               </span>

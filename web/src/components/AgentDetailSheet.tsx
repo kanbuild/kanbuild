@@ -3,6 +3,7 @@ import { Markdown } from './Markdown';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Activity,
+  Bug,
   ArrowUp,
   CheckCircle2,
   AlertTriangle,
@@ -39,9 +40,10 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, SheetContent } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AgentStatusBadge, PipelineChip, isPaused, PriorityBadge, RunProgress, isActive, newTokens, roleLabel, runDurationMs, runLabel } from './status';
+import { AgentStatusBadge, PipelineChip, isPaused, isReadyToStart, PriorityBadge, RunProgress, isActive, newTokens, roleLabel, runDurationMs, runLabel } from './status';
 import { DiffViewer } from './DiffViewer';
 import { Chip } from './ui/chip';
+import { Composer, composerTextareaClass, type ComposerSuggestion } from './ui/composer';
 import { GatePanel } from './GatePanel';
 import { PipelineTab } from './PipelineTab';
 import { Textarea } from './ui/input';
@@ -186,55 +188,76 @@ function ContinueSession({ feature, onQueued }: { feature: Feature; onQueued: ()
       setSending(false);
     }
   };
+  const unavailable = busy || !info?.worktreeExists;
   return (
-    <section className="metal-surface space-y-3 rounded-2xl p-4">
-      <h3 className="flex items-center gap-2 text-sm font-semibold">
-        <MessageSquarePlus className="h-4 w-4" /> Continue this session
-      </h3>
-      <div className="space-y-2">
+    <section className="space-y-3">
+      <div>
+        <h3 className="chrome-text flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <MessageSquarePlus className="h-4 w-4 text-primary" /> Keep working on this feature
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {busy ? 'Available once the current run finishes.' : 'Resumes the same Claude Code session, branch and worktree. The card moves back to Build and the agent starts right away.'}
+        </p>
+      </div>
+      <Composer
+        onSend={send}
+        canSend={!unavailable && !!message.trim()}
+        sending={sending}
+        sendLabel="Send follow-up"
+        suggestions={unavailable ? undefined : FOLLOW_UP_SUGGESTIONS}
+        onSuggest={(t) => setMessage(t)}
+        suggestionsLabel="Ideas"
+      >
         <MentionTextarea
           projectId={feature.projectId}
           value={message}
           onChange={setMessage}
           rows={3}
           placeholder="Ask the agent for more work, e.g. “Also handle the empty state and add a test for it.” Type @ to reference a file."
-          disabled={busy || !info?.worktreeExists}
+          disabled={unavailable}
+          aria-label="Follow-up message"
+          className={composerTextareaClass.replace('mt-2 ', '')}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && message.trim()) send();
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && message.trim()) {
+              e.preventDefault();
+              send();
+            }
           }}
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" className="rounded-full" onClick={send} disabled={busy || sending || !message.trim() || !info?.worktreeExists}>
-            <ArrowUp /> Send follow-up
-          </Button>
-          <span className="text-[11px] text-muted-foreground">
-            {busy ? 'Available once the current run finishes.' : 'Runs in the background with the same worktree, branch and session; the card moves back to Build.'}
-          </span>
-        </div>
-      </div>
+      </Composer>
       {info?.command && (
-        <div className="space-y-2 border-t pt-3">
-          <p className="text-xs text-muted-foreground">Or continue interactively in your terminal (resumes the exact same Claude Code session):</p>
-          <pre className="metal-inset overflow-x-auto rounded-lg p-2 font-mono text-xs">{info.command}</pre>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => copy(info.command!, 'Command copied')}>
-              <Copy /> Copy command
-            </Button>
-            {info.canOpenTerminal && (
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => api.openTerminal(feature.id).catch(toastError)}>
-                <SquareTerminal /> Open in Terminal
+        <details className="metal-surface rounded-xl p-3 text-xs">
+          <summary className="cursor-pointer font-medium text-muted-foreground">Continue in a terminal instead</summary>
+          <div className="space-y-2 pt-3">
+            <p className="text-muted-foreground">Resumes the exact same Claude Code session interactively:</p>
+            <pre className="metal-inset overflow-x-auto rounded-lg p-2 font-mono text-xs">{info.command}</pre>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => copy(info.command!, 'Command copied')}>
+                <Copy /> Copy command
               </Button>
-            )}
+              {info.canOpenTerminal && (
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => api.openTerminal(feature.id).catch(toastError)}>
+                  <SquareTerminal /> Open in Terminal
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Resuming reloads the previous conversation, so the first turn re-reads its context. Don&apos;t send a dashboard follow-up while the session is open in a terminal.
+            </p>
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            Resuming reloads the previous conversation, so the first turn re-reads its context. Don&apos;t send a dashboard follow-up while the session is open in a terminal.
-          </p>
-        </div>
+        </details>
       )}
       {info && !info.worktreeExists && <p className="text-xs text-red-600">The worktree was removed, so the session can no longer be resumed.</p>}
     </section>
   );
 }
+
+const FOLLOW_UP_SUGGESTIONS: ComposerSuggestion[] = [
+  { icon: <FlaskConical />, text: 'Add tests for ' },
+  { icon: <Bug />, text: 'Fix a bug: ' },
+  { icon: <Wrench />, text: 'Refactor ' },
+  { icon: <FileText />, text: 'Update docs for ' },
+];
 
 type DiffFocus = { file: string; line: number | null; nonce: number } | null;
 
@@ -493,6 +516,8 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
   }, [runId, active, run?.status]);
 
   if (!feature) return null;
+  // A finished feature opens on the chat composer, so continuing the work is the first thing you see.
+  const continueFirst = !active && !isActive(feature.agentStatus) && !feature.gate && !isPaused(feature) && (feature.status === 'done' || feature.agentStatus === 'completed');
 
   const act = async (fn: () => Promise<Feature>, msg: string) => {
     try {
@@ -569,6 +594,11 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                 <RotateCcw /> Retry {feature.run ? runLabel(feature.run).toLowerCase() : ''}
               </Button>
             )}
+            {isReadyToStart(feature) && (
+              <Button size="sm" onClick={() => act(() => api.startFeature(feature.id), 'Agent queued')} title="Auto-start is off for this project">
+                <Play /> Start build
+              </Button>
+            )}
             {isPaused(feature) && (
               <Button size="sm" variant="gold" onClick={() => act(() => api.continuePipeline(feature.id), 'Pipeline continued')} title="The last step finished but the next one did not start">
                 <Play /> Continue pipeline
@@ -639,6 +669,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
 
           <TabsContent value="overview" className="min-h-0 flex-1 overflow-y-auto">
             <div className="space-y-5 p-5">
+              {continueFirst && <ContinueSession feature={feature} onQueued={() => setTab('activity')} />}
               {run ? (
                 <section className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -702,7 +733,7 @@ export function AgentDetailSheet({ featureId, onClose, onEdit }: { featureId: st
                   </p>
                 </>
               )}
-              {!active && !feature.gate && <ContinueSession feature={feature} onQueued={() => setTab('activity')} />}
+              {!active && !feature.gate && !continueFirst && <ContinueSession feature={feature} onQueued={() => setTab('activity')} />}
               {run?.message && ['followup', 'fix', 'answer', 'feature', 'plan'].includes(run.kind) && (
                 <section>
                   <h3 className="mb-2 text-sm font-semibold">

@@ -107,6 +107,7 @@ export const api = {
   reveal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/reveal`, {}),
   session: (id: string) => req<SessionInfo>('GET', `/features/${id}/session`),
   openTerminal: (id: string) => req<{ ok: boolean }>('POST', `/features/${id}/open-terminal`, {}),
+  startFeature: (id: string) => req<Feature>('POST', `/features/${id}/start`),
   followUp: (id: string, message: string) => req<Feature>('POST', `/features/${id}/followup`, { message }),
   launchPreview: (projectId: string) => req<LaunchPreview>('GET', `/projects/${projectId}/launch-preview`),
   removeWorktree: (id: string, force = false) => req<{ ok: boolean; note: string }>('DELETE', `/features/${id}/worktree?force=${force}`),

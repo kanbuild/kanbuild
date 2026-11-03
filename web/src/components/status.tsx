@@ -43,10 +43,14 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
 /** A step finished in Build but nothing is waiting or running: the pipeline needs "Continue". */
 export const isPaused = (f: Feature) => f.status === 'build' && f.agentStatus === 'completed' && !f.gate;
 
+/** In Build with no agent assigned: auto-start is off and the card waits for ▶ (POST /features/:id/start). */
+export const isReadyToStart = (f: Feature) => f.status === 'build' && !f.agentStatus && !f.gate;
+
 /** Waiting for the user (checkpoint) or paused: the feature is not finished even though its last step completed. */
 export const isWaiting = (f: Feature) => !!f.gate || isPaused(f);
 
 export function RunProgress({ feature, run, className }: { feature: Feature; run: Run | null | undefined; className?: string }) {
+  if (isReadyToStart(feature) && (!run || run.id === feature.currentRunId)) return null;
   const status = run?.status ?? feature.agentStatus;
   if (!status) return null;
   if (isWaiting(feature) && (!run || run.id === feature.currentRunId)) return <Progress value={100} tone="amber" className={className} />;

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { getDb, newId, now } from './db.ts';
 import { bus } from './events.ts';
 import { expandHome, validateRepoPath } from './git.ts';
+import { getSettings } from './settings.ts';
 import { CLAUDE_ROLES, type PipelineConfig, type Project, type RolesConfig } from '../../shared/types.ts';
 
 export const DEFAULT_PIPELINE: PipelineConfig = {
@@ -16,6 +17,7 @@ export const DEFAULT_PIPELINE: PipelineConfig = {
   autoCreatePr: false,
   prDraft: true,
   remote: 'origin',
+  autoStart: null,
 };
 
 /** Merge a (partial, possibly untrusted) pipeline config over a base config. */
@@ -37,7 +39,13 @@ export function cleanPipeline(input: unknown, base: PipelineConfig = DEFAULT_PIP
     autoCreatePr: bool('autoCreatePr'),
     prDraft: bool('prDraft'),
     remote: typeof v.remote === 'string' && /^[\w.-]+$/.test(v.remote.trim()) ? v.remote.trim() : base.remote,
+    autoStart: v.autoStart === null || typeof v.autoStart === 'boolean' ? (v.autoStart as boolean | null) : (base.autoStart ?? null),
   };
+}
+
+/** Whether moving a card into Build starts its agent: the project override, else the global setting. */
+export function autoStartFor(project: Project): boolean {
+  return project.pipeline.autoStart ?? getSettings().autoStartBuild;
 }
 
 export function cleanRoles(input: unknown, base: RolesConfig = {}): RolesConfig {

@@ -4,7 +4,7 @@
  * Bumped whenever the backend and the dashboard must be updated together. The dashboard shows a
  * "rebuild/reload" banner when its compiled value differs from the backend's.
  */
-export const API_VERSION = 6;
+export const API_VERSION = 7;
 
 export type Priority = 'low' | 'medium' | 'high';
 export type FeatureStatus = 'backlog' | 'build' | 'done';
@@ -58,6 +58,8 @@ export interface PipelineConfig {
   prDraft: boolean;
   /** Git remote used for pushing and resolving the GitHub repository. */
   remote: string;
+  /** Start the agent when a card is moved into Build. null = use the global `autoStartBuild` setting. */
+  autoStart: boolean | null;
 }
 
 export interface RoleConfig {
@@ -370,6 +372,8 @@ export interface Settings {
   notifications: 'all' | 'attention' | 'off';
   /** macOS system notifications (osascript) when no dashboard tab is open. */
   systemNotifications: boolean;
+  /** Start the agent when a card is moved into Build. Off: cards wait in Build for an explicit start. Projects can override. */
+  autoStartBuild: boolean;
 }
 
 export interface GithubStatus {
