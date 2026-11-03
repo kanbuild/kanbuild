@@ -138,7 +138,7 @@ export function MentionTextarea({ projectId, value, onChange, showRefs = true, o
           {...rest}
         />
         {open && (
-          <div className="metal-surface absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl bg-background shadow-xl">
+          <div className="metal-surface absolute left-0 right-0 top-full z-50 mt-1 origin-top animate-pop-in overflow-hidden rounded-xl bg-background shadow-xl">
             <div className="border-b px-2 py-1 text-[11px] text-muted-foreground">
               {query ? (
                 <>

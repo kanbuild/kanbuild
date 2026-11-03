@@ -10,7 +10,7 @@ export const DialogClose = DialogPrimitive.Close;
 const Overlay = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>>(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn('fixed inset-0 z-50 bg-black/45 backdrop-blur-[3px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0', className)}
+    className={cn('fixed inset-0 z-50 bg-black/45 backdrop-blur-[3px] data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out', className)}
     {...props}
   />
 ));
@@ -23,7 +23,8 @@ export const DialogContent = React.forwardRef<HTMLDivElement, React.ComponentPro
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-2xl metal-surface p-6 shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          // Centered with inset-0 + m-auto + h-fit (not translate), so the scale animation grows from the middle.
+          'fixed inset-0 z-50 m-auto grid h-fit max-h-[90vh] w-[calc(100%-2rem)] max-w-lg origin-center gap-4 overflow-y-auto rounded-2xl metal-surface p-6 shadow-2xl data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           className,
         )}
         {...props}
@@ -46,7 +47,7 @@ export const SheetContent = React.forwardRef<HTMLDivElement, React.ComponentProp
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l border-metal-edge bg-background bg-gradient-to-b from-[hsl(var(--metal-hi))] to-[hsl(var(--background))] shadow-[inset_1px_0_0_hsl(var(--metal-highlight)),-24px_0_60px_-20px_hsl(var(--metal-shade))] sm:max-w-3xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right duration-200',
+          'fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l border-metal-edge bg-background bg-gradient-to-b from-[hsl(var(--metal-hi))] to-[hsl(var(--background))] shadow-[inset_1px_0_0_hsl(var(--metal-highlight)),-24px_0_60px_-20px_hsl(var(--metal-shade))] sm:max-w-3xl data-[state=open]:animate-sheet-in data-[state=closed]:animate-sheet-out',
           className,
         )}
         {...props}

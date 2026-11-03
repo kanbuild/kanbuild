@@ -304,7 +304,7 @@ The landing page (`landing/`) imports these, plus `Logo.tsx`, `lib/utils.ts` and
 | `badge.tsx` | rounded-full pills: default, secondary, outline, red, amber, green, blue, violet, `gold`, gray (with dark variants); `dot` adds a leading status dot |
 | `composer.tsx` | `Composer({tabs, children, footerLeft, hint, onSend, canSend, sending, sendLabel, showFooter, suggestions, onSuggest, size})`: Emergent prompt card with a round send arrow and optional suggestion chips; `composerTextareaClass` makes a borderless textarea for it |
 | `chip.tsx` | `Chip({active, dot, icon})`: rounded-full `metal-raised` button for suggestions, filters and step chips |
-| `dialog.tsx` | `DialogContent` (centered, max-w-lg, `metal-surface rounded-2xl`, blurred overlay), `SheetContent` (right side, `sm:max-w-3xl`), round chrome close button, header, footer, title, description |
+| `dialog.tsx` | `DialogContent` (centered with `inset-0 m-auto h-fit`, **not** translate, so its scale animation grows from the middle; max-w-lg, `metal-surface rounded-2xl`, blurred overlay), `SheetContent` (right side, `sm:max-w-3xl`), round chrome close button, header, footer, title, description |
 | `tabs.tsx` | Radix tabs styled as folder tabs: a hairline baseline, the active tab is a raised metal tab |
 | `input.tsx` | `Input`, `Textarea` (`metal-inset` wells, accent focus ring), native `Select` (`metal-raised`), `Label`, `Field({label, hint})` |
 | `progress.tsx` | `Progress({value|null, tone})` with a `metal-inset` track and a glossy gradient bar; `null` is indeterminate (`animate-indeterminate` keyframe) |
@@ -335,7 +335,23 @@ The landing page (`landing/`) imports these, plus `Logo.tsx`, `lib/utils.ts` and
 | `sheen` | Diagonal light sweep on hover (uses `::after`) |
 | `running-edge` | Animated accent line on top of a running card (uses `::before`) |
 
-Animations are disabled under `prefers-reduced-motion`. Scrollbars are thin metallic thumbs. `.prose-report` code blocks use `metal-inset`.
+### Motion
+
+The keyframes live in `web/tailwind.config.js` (`theme.extend.keyframes` / `animation`). Entrances use a soft spring (`cubic-bezier(0.16, 1, 0.3, 1)`, 160–320 ms). Exits are shorter, ease-in and `forwards`, so Radix keeps the node mounted until the exit animation ends.
+
+| Class | Used by |
+|---|---|
+| `animate-overlay-in/out` | Dialog and sheet backdrops (fade) |
+| `animate-dialog-in/out` | `DialogContent`: fade + rise 12px + scale 0.96 → 1, from the centre |
+| `animate-sheet-in/out` | `SheetContent`: slide in from the right edge |
+| `animate-pop-in` | `BranchSwitcher` popover, `MentionTextarea` `@file` menu (origin at the anchor) |
+| `animate-toast-in` | Toasts (rise + scale from the bottom-right stack) |
+| `animate-fade-up` | `TabsContent` when a tab becomes active |
+| `animate-lift` | The card in the drag overlay (`FeatureCardView dragging`): tilt + scale up |
+
+**Gotcha:** a keyframe sets the whole `transform`, so never position an animated element with `-translate-x/y-1/2`. The animation replaces the centering, and the element appears to fly in from the bottom-right corner (this was the old dialog bug). Don't animate the sortable card wrapper either, because dnd-kit drives its `transform` inline.
+
+Under `prefers-reduced-motion`, these animations collapse to 1 ms (spinners and progress bars keep moving), and `sheen` / `running-edge` are disabled. Scrollbars are thin metallic thumbs. `.prose-report` code blocks use `metal-inset`.
 
 **Status colors**
 

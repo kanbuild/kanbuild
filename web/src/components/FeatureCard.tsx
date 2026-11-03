@@ -39,7 +39,7 @@ export function FeatureCardView({ feature, dragging, onClick }: { feature: Featu
       onClick={onClick}
       className={cn(
         'metal-surface sheen group relative cursor-pointer rounded-xl p-3 text-card-foreground transition-[transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-lg',
-        dragging && 'rotate-1 shadow-glow',
+        dragging && 'animate-lift shadow-glow',
         active && feature.agentStatus !== 'queued' && 'running-edge',
         feature.agentStatus === 'failed' && 'border-red-300 dark:border-red-900/80',
         isWaiting(feature) && 'shadow-gold-glow',

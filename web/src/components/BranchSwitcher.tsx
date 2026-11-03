@@ -99,7 +99,7 @@ export function BranchSwitcher({ project }: { project: Project }) {
         <ChevronDown className="h-3 w-3 shrink-0" />
       </button>
       {open && (
-        <div className="metal-surface absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl p-2 text-foreground">
+        <div className="metal-surface absolute left-0 top-full z-50 mt-1.5 w-72 origin-top-left animate-pop-in rounded-xl p-2 text-foreground">
           <div className="px-1 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Base branch</div>
           <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter branches…" className="metal-inset h-8 text-xs" />
           <div className="mt-2 max-h-64 overflow-y-auto" role="listbox">

@@ -266,6 +266,10 @@
   @media (prefers-reduced-motion: reduce) {
     .sheen::after { display: none; }
     .running-edge::before { animation: none; }
+    /* Dialogs, sheets, popovers and toasts appear instantly (spinners/progress keep their motion). */
+    [class*='animate-dialog-'], [class*='animate-sheet-'], [class*='animate-overlay-'], .animate-pop-in, .animate-toast-in, .animate-fade-up, .animate-lift {
+      animation-duration: 1ms !important;
+    }
   }
 }
 
