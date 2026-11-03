@@ -92,6 +92,7 @@ npm run test -w desktop # unit tests for env.ts
 
 - Only the backend's port matters. Set `ORCH_PORT` before launching the app to change it (the dashboard origin, and so its localStorage, follows the port).
 - If `npm start` is already running, the app reuses that backend, and quitting the app does not stop it.
+- The reverse does not work: `npm start` while the app (or its backend) is running exits with "A backend is already running at http://localhost:4317". Quit the app first, or set `ORCH_PORT`.
 - Logs: `~/Library/Logs/AI Orchestrator/server.log` (on Linux dev runs, `<userData>/logs/server.log`).
 - After upgrading the server's Node requirement, bump `NODE_VERSION` in `fetch-node.mjs`.
 - Electron is pinned exactly (`desktop/package.json`) because `electronVersion` is read from it.

@@ -97,6 +97,26 @@ bus.on('message', (msg: ServerMessage) => {
   for (const client of wss.clients) if (client.readyState === WebSocket.OPEN) client.send(data);
 });
 
+// A second `npm start` (or one started while the Mac app runs) hits EADDRINUSE: explain instead of a stack trace.
+server.on('error', async (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EADDRINUSE') throw err;
+  let ours = false;
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/api/settings`, { signal: AbortSignal.timeout(1000) });
+    ours = res.ok && 'apiVersion' in ((await res.json()) as object);
+  } catch {
+    /* not an orchestrator, or not answering */
+  }
+  console.error(
+    ours
+      ? `[orchestrator] A backend is already running at http://localhost:${PORT} (the Mac app or another \`npm start\`).\n` +
+          `  Open that, or stop it first (find it with: lsof -nP -iTCP:${PORT} -sTCP:LISTEN), then run this again.\n` +
+          `  Running agents are detached and survive a restart. To run a second backend, set ORCH_PORT.`
+      : `[orchestrator] Port ${PORT} is already used by another program. Stop it, or set ORCH_PORT to use a different port.`,
+  );
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`[orchestrator] listening on http://${HOST === '127.0.0.1' ? 'localhost' : HOST}:${PORT}`);
   console.log(`[orchestrator] data directory: ${DATA_DIR}`);
