@@ -20,7 +20,7 @@ Source files: everything under `web/` — `src/main.tsx`, `App.tsx`, `store.ts`,
 - **Dev:** Vite on `127.0.0.1:5173`, proxying `/api` and `/ws` (ws:true) to :4317.
 - **Checks:** there are no web tests and no linter. The only check is `npm run typecheck`.
 - `index.html`: title "Kanbuild". The favicon is `/favicon.png` (64 px) plus `/apple-touch-icon.png` (180 px), both from `web/public/`, which Vite copies into `web/dist` for the server to serve.
-- **Branding:** the product name is **Kanbuild**. The mark is `components/Logo.tsx`: an `<img>` of `src/assets/logo.png` (the robot in front of Kanban columns, 256 px, transparent, bundled by Vite), default `h-8 w-8`. The dashboard and the landing page both use it, so swap the logo there only. The favicons are separate PNGs made from the same artwork.
+- **Branding:** the product name is **Kanbuild**. The mark is `components/Logo.tsx`: an `<img>` of `src/assets/logo.png` (the robot in front of Kanban columns, 256 px, transparent, bundled by Vite), default `h-8 w-8`. Swap the logo there only. The favicons are separate PNGs made from the same artwork.
 
 ## Bootstrap (`main.tsx`)
 
@@ -309,7 +309,7 @@ Rendered as an Emergent "agent has questions" card: a gold-glow `metal-surface` 
 
 ### UI primitives (`components/ui/`)
 
-The landing page (`landing/`) imports these, plus `Logo.tsx` (and its `assets/logo.png`), `lib/utils.ts` and `index.css`, directly through its `@` → `web/src` alias. Keep them free of dashboard-only imports (store, api), or the landing build breaks. See [landing-page.md](landing-page.md).
+The private marketing site (kanbuild/kanbuild-site) keeps **copies** of `button`, `badge`, `progress`, `Logo.tsx` (+ `assets/logo.png`), `theme.ts`, `lib/utils.ts`, `index.css` and `tailwind.config.js`. Nothing here imports from it; changes here reach the site only when it re-copies them.
 
 | File | Contents |
 |---|---|

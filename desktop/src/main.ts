@@ -210,7 +210,7 @@ function buildMenu() {
     {
       role: 'help',
       submenu: [
-        { label: 'Project on GitHub', click: () => void shell.openExternal('https://github.com/nelsonng2002/autonomous-feature-agent') },
+        { label: 'Project on GitHub', click: () => void shell.openExternal('https://github.com/kanbuild/kanbuild') },
         { label: 'Show Backend Log', click: () => shell.showItemInFolder(LOG_FILE) },
         { label: 'Open Data Folder', click: () => void shell.openPath(process.env.ORCH_DATA_DIR || path.join(os.homedir(), '.local-orchestrator')) },
       ],
