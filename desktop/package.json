@@ -6,7 +6,7 @@
   "description": "macOS app for Kanbuild: the same dashboard and backend, packaged with Electron",
   "license": "MIT",
   "author": "nelsonng2002",
-  "homepage": "https://github.com/nelsonng2002/autonomous-feature-agent",
+  "homepage": "https://github.com/kanbuild/kanbuild",
   "main": "dist/main.cjs",
   "scripts": {
     "build": "node scripts/build-main.mjs",

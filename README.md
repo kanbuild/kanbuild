@@ -17,7 +17,7 @@ changes, desktop notifications tell you when you're needed, and one click opens 
 
 ## Mac app
 
-Download **Kanbuild** for macOS (Apple silicon or Intel) from the [Releases page](https://github.com/nelsonng2002/autonomous-feature-agent/releases). Open the `.dmg` and drag the app to Applications.
+Download **Kanbuild** for macOS (Apple silicon or Intel) from the [Releases page](https://github.com/kanbuild/kanbuild/releases). Open the `.dmg` and drag the app to Applications.
 
 - It has the same board, pipeline and features as the web version. There's no account and no sign-in: everything runs locally against your own `claude` CLI login.
 - Node.js is bundled, so you only need `git` and an authenticated [Claude Code](https://code.claude.com) CLI. The app reads your shell's `PATH`, so it finds `claude` wherever your terminal does.
@@ -26,10 +26,6 @@ Download **Kanbuild** for macOS (Apple silicon or Intel) from the [Releases page
 - Backend log: `~/Library/Logs/Kanbuild/server.log` (Help → Show Backend Log).
 
 Build it yourself with `npm install && npm run desktop:dist` on a Mac (output in `desktop/release/`), or run it from source with `npm run desktop:dev`. Details, signing and the release process: [docs/desktop-app.md](docs/desktop-app.md).
-
-## Landing page
-
-`landing/` holds the public Kanbuild site: hero, features, download and GitHub sections, plus a donate page that opens after a download. Run `npm run landing:dev`, or build it with `npm run landing:build` and deploy `landing/dist` to any static host. Set the .dmg and Stripe links in `landing/src/config.ts` (or `VITE_DMG_URL` / `VITE_STRIPE_LINK`). See [docs/landing-page.md](docs/landing-page.md).
 
 ## Requirements (web version)
 
