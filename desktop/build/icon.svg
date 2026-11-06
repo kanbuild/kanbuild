@@ -1,25 +1,83 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1932 1932">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#27272f"/>
-      <stop offset="1" stop-color="#0b0b0f"/>
+    <linearGradient id="blue" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#2bb3ff"/>
+      <stop offset="0.45" stop-color="#0a6cff"/>
+      <stop offset="1" stop-color="#0540c8"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc21a"/>
+      <stop offset="1" stop-color="#ff7a12"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0df08a"/>
+      <stop offset="0.55" stop-color="#05b878"/>
+      <stop offset="1" stop-color="#06505e"/>
+    </linearGradient>
+    <linearGradient id="cardBlue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8f0ff"/>
+      <stop offset="1" stop-color="#c8d6f8"/>
+    </linearGradient>
+    <linearGradient id="cardOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe6c4"/>
+      <stop offset="1" stop-color="#f6b980"/>
+    </linearGradient>
+    <linearGradient id="cardGreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c4f6de"/>
+      <stop offset="1" stop-color="#8fe3c0"/>
+    </linearGradient>
+    <linearGradient id="white" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfe6fb"/>
+    </linearGradient>
+    <linearGradient id="lip" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a9d4ff"/>
+      <stop offset="0.35" stop-color="#e4eefe"/>
+      <stop offset="1" stop-color="#f4f6ff"/>
     </linearGradient>
   </defs>
-  <!-- macOS icon grid: 824px rounded square centered in 1024 -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
-  <!-- three kanban columns -->
-  <g fill="#ffffff" fill-opacity="0.10">
-    <rect x="215" y="250" width="170" height="524" rx="36"/>
-    <rect x="427" y="250" width="170" height="524" rx="36"/>
-    <rect x="639" y="250" width="170" height="524" rx="36"/>
+
+  <!-- dark opening the board sits in -->
+  <ellipse cx="965" cy="1135" rx="770" ry="250" transform="rotate(-13 965 1135)" fill="#04050f"/>
+
+  <!-- blue column -->
+  <path d="M365 450 L660 405 Q725 398 730 470 L730 1300 Q730 1375 660 1380 L380 1380 Q305 1380 305 1300 L305 520 Q305 460 365 450 Z" fill="url(#blue)"/>
+  <path id="bc1" d="M385 545 L640 500 Q680 495 680 540 L680 600 Q680 635 640 645 L405 683 Q365 688 365 650 L365 580 Q365 550 385 545 Z" fill="url(#cardBlue)"/>
+  <path d="M385 735 L640 690 Q680 685 680 730 L680 790 Q680 825 640 835 L405 873 Q365 878 365 840 L365 770 Q365 740 385 735 Z" fill="url(#cardBlue)"/>
+
+  <!-- orange column -->
+  <rect x="757" y="385" width="423" height="560" rx="62" fill="url(#orange)"/>
+  <rect x="808" y="472" width="317" height="138" rx="32" fill="url(#cardOrange)"/>
+  <rect x="808" y="652" width="262" height="138" rx="32" fill="url(#cardOrange)" opacity="0.9"/>
+
+  <!-- green column -->
+  <path d="M1270 395 L1560 425 Q1630 435 1630 510 L1630 1190 L1300 1260 L1208 1200 L1208 460 Q1208 400 1270 395 Z" fill="url(#green)"/>
+  <path d="M1280 495 L1540 525 Q1573 530 1573 565 L1573 640 Q1573 672 1540 668 L1290 640 Q1260 635 1260 600 L1260 535 Q1260 497 1280 495 Z" fill="url(#cardGreen)"/>
+  <path d="M1280 690 L1540 718 Q1573 722 1573 757 L1573 825 Q1573 860 1540 858 L1290 830 Q1260 826 1260 790 L1260 730 Q1260 692 1280 690 Z" fill="url(#cardGreen)"/>
+
+  <!-- robot body -->
+  <path d="M495 1450 C490 1300 580 1135 740 1118 L1180 1118 C1260 1140 1330 1200 1310 1280 L1300 1440 Z" fill="url(#white)" stroke="#05060f" stroke-width="14" stroke-linejoin="round"/>
+  <!-- </> -->
+  <g fill="none" stroke="#05060f" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M800 1260 L752 1300 L828 1352"/>
+    <path d="M1030 1232 L1070 1286 L992 1362"/>
+    <path d="M962 1208 L866 1388"/>
   </g>
-  <!-- cards -->
-  <rect x="239" y="282" width="122" height="96" rx="22" fill="#a1a1aa"/>
-  <rect x="239" y="398" width="122" height="96" rx="22" fill="#a1a1aa" fill-opacity="0.6"/>
-  <rect x="451" y="282" width="122" height="150" rx="22" fill="#f59e0b"/>
-  <rect x="663" y="282" width="122" height="96" rx="22" fill="#10b981"/>
-  <rect x="663" y="398" width="122" height="96" rx="22" fill="#10b981"/>
-  <rect x="663" y="514" width="122" height="96" rx="22" fill="#10b981" fill-opacity="0.6"/>
-  <!-- spark: the agent -->
-  <path d="M512 520 L534 590 L604 612 L534 634 L512 704 L490 634 L420 612 L490 590 Z" fill="#ffffff"/>
+
+  <!-- antenna -->
+  <path d="M1088 800 L1106 745" stroke="#05060f" stroke-width="30" stroke-linecap="round"/>
+  <path d="M1088 800 L1106 745" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="1118" cy="705" r="58" fill="url(#white)" stroke="#05060f" stroke-width="14"/>
+
+  <!-- robot head -->
+  <path d="M665 1010 C660 850 800 765 990 765 C1190 765 1340 880 1335 1030 C1330 1130 1200 1175 1000 1175 C800 1175 670 1120 665 1010 Z" fill="url(#white)" stroke="#05060f" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M740 1000 C740 900 840 858 990 858 C1150 858 1275 910 1275 1010 C1275 1100 1170 1135 1000 1135 C830 1135 740 1090 740 1000 Z" fill="#04050f"/>
+  <!-- eyes -->
+  <g fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round">
+    <path d="M820 1000 Q865 940 912 985"/>
+    <path d="M1043 1015 Q1090 955 1160 1000"/>
+  </g>
+
+  <!-- front lip of the opening -->
+  <path d="M155 1345 C250 1560 900 1560 1500 1380 C1650 1330 1770 1100 1790 885 C1775 1080 1650 1270 1480 1325 C1100 1440 760 1490 560 1452 C400 1440 260 1400 215 1290 C170 1300 150 1320 155 1345 Z" fill="url(#lip)"/>
 </svg>
